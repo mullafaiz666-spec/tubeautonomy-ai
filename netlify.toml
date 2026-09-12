@@ -1,0 +1,16 @@
+[build]
+  command = "node tubeverse-migration/unpack.mjs && npm --prefix tubeverse-runtime install --no-audit --no-fund && npm --prefix tubeverse-runtime run build"
+  publish = "tubeverse-runtime/dist"
+
+[functions]
+  directory = "tubeverse-runtime/netlify/functions"
+  node_bundler = "esbuild"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+  force = false
