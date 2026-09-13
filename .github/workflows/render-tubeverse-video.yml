@@ -85,6 +85,18 @@ jobs:
           mkdir -p work/job/media
           python renderer/fetch_media.py '${{ steps.job.outputs.job_file }}' work/job/media
 
+      - name: Source open-license Commons visuals
+        shell: bash
+        run: |
+          set +e
+          mkdir -p work/job/commons
+          python renderer/commons_media.py work/job/scene-plan.json work/job/meta.json work/job/commons
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            echo 'Wikimedia Commons sourcing was unavailable; deterministic TubeVerse scene cards remain available.'
+          fi
+
       - name: Generate local Kokoro narration
         id: voice
         shell: bash
@@ -124,10 +136,16 @@ jobs:
           TITLE="$(cat "$GITHUB_WORKSPACE/work/job/title.txt")"
           SCRIPT="$(cat "$GITHUB_WORKSPACE/work/job/script.txt")"
           FALLBACK="$GITHUB_WORKSPACE/work/job/background.mp4"
-          mapfile -t MEDIA_FILES < <(find "$GITHUB_WORKSPACE/work/job/media" -maxdepth 1 -type f \( -name '*.mp4' -o -name '*.mov' -o -name '*.mkv' -o -name '*.webm' \) -print | sort)
-          if [ "${#MEDIA_FILES[@]}" -gt 0 ]; then
-            MATERIALS="$(IFS=,; echo "${MEDIA_FILES[*]}")"
-            echo "Using ${#MEDIA_FILES[@]} supplied media file(s)."
+
+          mapfile -t EXPLICIT_MEDIA < <(find "$GITHUB_WORKSPACE/work/job/media" -maxdepth 1 -type f \( -name '*.mp4' -o -name '*.mov' -o -name '*.mkv' -o -name '*.webm' \) -print | sort)
+          mapfile -t COMMONS_MEDIA < <(find "$GITHUB_WORKSPACE/work/job/commons" -maxdepth 1 -type f -name '*.mp4' -print 2>/dev/null | sort)
+
+          if [ "${#EXPLICIT_MEDIA[@]}" -gt 0 ]; then
+            MATERIALS="$(IFS=,; echo "${EXPLICIT_MEDIA[*]}")"
+            echo "Using ${#EXPLICIT_MEDIA[@]} operator-supplied owned/licensed media file(s)."
+          elif [ "${#COMMONS_MEDIA[@]}" -gt 0 ]; then
+            MATERIALS="$(IFS=,; echo "${COMMONS_MEDIA[*]}")"
+            echo "Using ${#COMMONS_MEDIA[@]} open-license Wikimedia Commons scene clip(s)."
           else
             MATERIALS="$FALLBACK"
             echo 'Using TubeVerse scene-card fallback material.'
@@ -194,5 +212,6 @@ jobs:
             output/voice-ffprobe.json
             work/job/scene-plan.json
             work/job/meta.json
+            work/job/commons/attribution.json
           if-no-files-found: warn
           retention-days: 7
