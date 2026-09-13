@@ -27,8 +27,23 @@ jobs:
           test -s moneyprinter-worker/TubeVerse-MoneyPrinter-Worker.zip.b64
           grep -q '79d7d122ae09ad9e294afff787a473401026f681' moneyprinter-worker/README.md
 
-      - name: Reconstruct TubeVerse runtime
-        run: node tubeverse-migration/unpack.mjs
+      - name: Recover and inspect TubeVerse runtime
+        run: |
+          node -e "const fs=require('fs'); fs.writeFileSync('tubeverse-migration/source.tgz', Buffer.from(fs.readFileSync('tubeverse-migration/source.b64','utf8').trim(),'base64'))"
+          rm -rf tubeverse-runtime tubeverse-netlify
+          set +e
+          tar -xzf tubeverse-migration/source.tgz -C .
+          TAR_STATUS=$?
+          set -e
+          echo "tar_status=$TAR_STATUS"
+          test -d tubeverse-netlify
+          echo "recovered_files=$(find tubeverse-netlify -type f | wc -l)"
+          test -s tubeverse-netlify/package.json
+          test -s tubeverse-netlify/pages/_index.tsx
+          test -s tubeverse-netlify/endpoints/jobs_POST.schema.ts
+          test -s tubeverse-netlify/endpoints/workers_POST.schema.ts
+          mv tubeverse-netlify tubeverse-runtime
+          node tubeverse-overlay/patch-moneyprinter.mjs
 
       - name: Verify MoneyPrinter wiring
         run: |
