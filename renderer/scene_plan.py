@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Zero-key scene planner for TubeVerse.
 
-Produces a ShortGPT-compatible-ish scene manifest from a prepared script.  This
-local planner is intentionally deterministic so GitHub Actions can render even
-when no LLM/API key is configured.  A future ShortGPT/Gemini adapter can replace
-this planner without changing the manifest consumed by the renderer.
+Produces a ShortGPT-compatible-ish scene manifest from a prepared script. This
+local planner is deterministic so GitHub Actions can render when no LLM/API key
+is configured. A future ShortGPT/Gemini adapter can replace this planner without
+changing the manifest consumed by the renderer.
 """
 from __future__ import annotations
 
@@ -36,7 +36,9 @@ def keywords(text: str, limit: int = 5) -> list[str]:
             order.append(word)
             counts[word] = 0
         counts[word] += 1
-    order.sort(key=lambda w: (-counts[w], order.index(w)))
+    # Python's sort is stable, so equal-frequency words retain first-seen order.
+    # Avoid calling order.index() while sort is mutating the list.
+    order.sort(key=lambda w: -counts[w])
     return order[:limit]
 
 
@@ -44,7 +46,6 @@ def build_plan(script: str, max_scenes: int) -> list[dict]:
     parts = sentences(script)
     if not parts:
         raise ValueError("script contains no usable sentences")
-    # Keep output compact for Shorts; fold overflow into the last scene.
     if len(parts) > max_scenes:
         head = parts[: max_scenes - 1]
         head.append(" ".join(parts[max_scenes - 1 :]))
