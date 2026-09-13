@@ -1,0 +1,131 @@
+name: TubeVerse Render Video
+
+on:
+  push:
+    branches: [tubeverse-actions]
+    paths:
+      - 'render-queue/**.json'
+      - 'renderer/**'
+      - '.github/workflows/render-tubeverse-video.yml'
+  workflow_dispatch:
+    inputs:
+      job_file:
+        description: Render job JSON path
+        required: true
+        default: render-queue/demo-001.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tubeverse-render-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      MPT_COMMIT: cf5a3aedad1741d012152d355aa909d224fc4557
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tubeverse-actions
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system media tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-dejavu-core fontconfig libgl1
+          python -m pip install --upgrade pip uv
+
+      - name: Resolve render job
+        id: job
+        shell: bash
+        run: |
+          set -euo pipefail
+          JOB_FILE='${{ github.event.inputs.job_file }}'
+          if [ -z "$JOB_FILE" ]; then
+            JOB_FILE="$(git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" | grep '^render-queue/.*\.json$' | head -n1 || true)"
+          fi
+          if [ -z "$JOB_FILE" ]; then JOB_FILE='render-queue/demo-001.json'; fi
+          test -f "$JOB_FILE"
+          echo "job_file=$JOB_FILE" >> "$GITHUB_OUTPUT"
+          rm -rf work/job output .runtime/MoneyPrinterTurbo
+          mkdir -p work/job output .runtime
+          python renderer/prepare_job.py "$JOB_FILE" work/job
+          ASPECT="$(python - <<'PY'
+          import json
+          print(json.load(open('work/job/meta.json'))['aspectRatio'])
+          PY
+          )"
+          echo "aspect=$ASPECT" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch pinned MoneyPrinterTurbo engine
+        run: |
+          git clone --filter=blob:none https://github.com/harry0703/MoneyPrinterTurbo.git .runtime/MoneyPrinterTurbo
+          cd .runtime/MoneyPrinterTurbo
+          git checkout "$MPT_COMMIT"
+          git rev-parse HEAD
+
+      - name: Install MoneyPrinterTurbo
+        working-directory: .runtime/MoneyPrinterTurbo
+        run: |
+          uv sync --frozen
+
+      - name: Render real MP4
+        shell: bash
+        working-directory: .runtime/MoneyPrinterTurbo
+        run: |
+          set -euo pipefail
+          TITLE="$(cat "$GITHUB_WORKSPACE/work/job/title.txt")"
+          SCRIPT="$(cat "$GITHUB_WORKSPACE/work/job/script.txt")"
+          MATERIAL="$GITHUB_WORKSPACE/work/job/background.mp4"
+          uv run python cli.py \
+            --video-subject "$TITLE" \
+            --video-script "$SCRIPT" \
+            --video-source local \
+            --video-materials "$MATERIAL" \
+            --video-aspect '${{ steps.job.outputs.aspect }}' \
+            --video-concat-mode sequential \
+            --video-transition-mode fade-in \
+            --voice-name 'en-US-JennyNeural-Female' \
+            --bgm-type none \
+            --subtitle-enabled \
+            --subtitle-position bottom \
+            --font-size 46 \
+            --n-threads 2 \
+            --stop-at video | tee "$GITHUB_WORKSPACE/output/mpt-result.json"
+
+          VIDEO="$(find storage/tasks -type f -name '*.mp4' -printf '%s %p\n' | sort -nr | head -n1 | cut -d' ' -f2-)"
+          test -n "$VIDEO"
+          test -s "$VIDEO"
+          cp "$VIDEO" "$GITHUB_WORKSPACE/output/tubeverse-demo.mp4"
+          ffprobe -v error -show_entries format=duration,size -of json "$GITHUB_WORKSPACE/output/tubeverse-demo.mp4" | tee "$GITHUB_WORKSPACE/output/ffprobe.json"
+
+      - name: Verify output
+        run: |
+          test -s output/tubeverse-demo.mp4
+          python - <<'PY'
+          import json, pathlib
+          p=pathlib.Path('output/ffprobe.json')
+          d=json.loads(p.read_text())
+          duration=float(d['format']['duration'])
+          size=int(d['format']['size'])
+          assert duration > 1, duration
+          assert size > 10000, size
+          print({'duration':duration,'size':size})
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tubeverse-video-${{ github.run_number }}
+          path: |
+            output/tubeverse-demo.mp4
+            output/mpt-result.json
+            output/ffprobe.json
+          if-no-files-found: error
+          retention-days: 7
