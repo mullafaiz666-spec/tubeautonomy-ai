@@ -11,8 +11,16 @@ const tar = spawnSync('tar', ['-xzf', tgz.pathname, '-C', '.'], { stdio: 'inheri
 if (tar.status !== 0) process.exit(tar.status ?? 1);
 await fs.rename('tubeverse-netlify', 'tubeverse-runtime');
 
+// Apply portable integrations after reconstructing the runtime but before npm install/build.
+const moneyPrinterPatch = spawnSync(
+  process.execPath,
+  ['tubeverse-overlay/patch-moneyprinter.mjs'],
+  { stdio: 'inherit' },
+);
+if (moneyPrinterPatch.status !== 0) process.exit(moneyPrinterPatch.status ?? 1);
+
 await fs.mkdir('netlify/database', { recursive: true });
 await fs.rm('netlify/database/migrations', { recursive: true, force: true });
 await fs.cp('tubeverse-runtime/netlify/database/migrations', 'netlify/database/migrations', { recursive: true });
 await fs.rm(tgz, { force: true });
-console.log('TubeVerse runtime reconstructed for Netlify build.');
+console.log('TubeVerse runtime reconstructed with MoneyPrinterTurbo worker integration.');
