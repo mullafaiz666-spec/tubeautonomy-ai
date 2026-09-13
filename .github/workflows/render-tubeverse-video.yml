@@ -24,7 +24,7 @@ concurrency:
 jobs:
   render:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 55
     env:
       MPT_COMMIT: cf5a3aedad1741d012152d355aa909d224fc4557
     steps:
@@ -39,10 +39,19 @@ jobs:
       - name: Install system media tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg fonts-dejavu-core fontconfig libgl1
+          sudo apt-get install -y ffmpeg fonts-dejavu-core fontconfig libgl1 espeak-ng
           python -m pip install --upgrade pip uv
 
-      - name: Resolve render job
+      - name: Install TubeVerse AI tools
+        run: |
+          python -m pip install 'kokoro>=0.9.4' soundfile 'faster-whisper>=1.1.0' yt-dlp
+          python - <<'PY'
+          import importlib.metadata as m
+          for pkg in ['kokoro','faster-whisper','yt-dlp','soundfile']:
+              print(pkg, m.version(pkg))
+          PY
+
+      - name: Resolve render job and build scene plan
         id: job
         shell: bash
         run: |
@@ -64,6 +73,32 @@ jobs:
           )"
           echo "aspect=$ASPECT" >> "$GITHUB_OUTPUT"
 
+      - name: Fetch optional owned or licensed media
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/job/media
+          python renderer/fetch_media.py '${{ steps.job.outputs.job_file }}' work/job/media
+
+      - name: Generate local Kokoro narration
+        id: voice
+        shell: bash
+        run: |
+          set +e
+          python renderer/kokoro_tts.py work/job/script.txt work/job/voice.wav --voice af_heart --lang a --speed 1.0
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ] && [ -s work/job/voice.wav ]; then
+            echo "engine=kokoro" >> "$GITHUB_OUTPUT"
+            echo "audio=$GITHUB_WORKSPACE/work/job/voice.wav" >> "$GITHUB_OUTPUT"
+            ffprobe -v error -show_entries format=duration,size -of json work/job/voice.wav | tee output/voice-ffprobe.json
+          else
+            echo 'Kokoro failed; falling back to MoneyPrinterTurbo Edge TTS.'
+            rm -f work/job/voice.wav
+            echo "engine=edge" >> "$GITHUB_OUTPUT"
+            echo "audio=" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Fetch pinned MoneyPrinterTurbo engine
         run: |
           git clone --filter=blob:none https://github.com/harry0703/MoneyPrinterTurbo.git .runtime/MoneyPrinterTurbo
@@ -83,49 +118,76 @@ jobs:
           set -euo pipefail
           TITLE="$(cat "$GITHUB_WORKSPACE/work/job/title.txt")"
           SCRIPT="$(cat "$GITHUB_WORKSPACE/work/job/script.txt")"
-          MATERIAL="$GITHUB_WORKSPACE/work/job/background.mp4"
-          uv run python cli.py \
-            --video-subject "$TITLE" \
-            --video-script "$SCRIPT" \
-            --video-source local \
-            --video-materials "$MATERIAL" \
-            --video-aspect '${{ steps.job.outputs.aspect }}' \
-            --video-concat-mode sequential \
-            --video-transition-mode fade-in \
-            --voice-name 'en-US-JennyNeural-Female' \
-            --bgm-type none \
-            --subtitle-enabled \
-            --subtitle-position bottom \
-            --font-size 46 \
-            --n-threads 2 \
-            --stop-at video | tee "$GITHUB_WORKSPACE/output/mpt-result.json"
+          FALLBACK="$GITHUB_WORKSPACE/work/job/background.mp4"
+          mapfile -t MEDIA_FILES < <(find "$GITHUB_WORKSPACE/work/job/media" -maxdepth 1 -type f \( -name '*.mp4' -o -name '*.mov' -o -name '*.mkv' -o -name '*.webm' \) -print | sort)
+          if [ "${#MEDIA_FILES[@]}" -gt 0 ]; then
+            MATERIALS="$(IFS=,; echo "${MEDIA_FILES[*]}")"
+            echo "Using ${#MEDIA_FILES[@]} supplied media file(s)."
+          else
+            MATERIALS="$FALLBACK"
+            echo 'Using TubeVerse scene-card fallback material.'
+          fi
+
+          ARGS=(
+            --video-subject "$TITLE"
+            --video-script "$SCRIPT"
+            --video-source local
+            --video-materials "$MATERIALS"
+            --video-aspect '${{ steps.job.outputs.aspect }}'
+            --video-concat-mode sequential
+            --video-transition-mode fade-in
+            --bgm-type none
+            --subtitle-enabled
+            --subtitle-position bottom
+            --font-size 46
+            --n-threads 2
+            --stop-at video
+          )
+          if [ -s "$GITHUB_WORKSPACE/work/job/voice.wav" ]; then
+            ARGS+=(--custom-audio-file "$GITHUB_WORKSPACE/work/job/voice.wav")
+          else
+            ARGS+=(--voice-name 'en-US-JennyNeural-Female')
+          fi
+
+          uv run python cli.py "${ARGS[@]}" | tee "$GITHUB_WORKSPACE/output/mpt-result.json"
 
           VIDEO="$(find storage/tasks -type f -name '*.mp4' -printf '%s %p\n' | sort -nr | head -n1 | cut -d' ' -f2-)"
           test -n "$VIDEO"
           test -s "$VIDEO"
-          cp "$VIDEO" "$GITHUB_WORKSPACE/output/tubeverse-demo.mp4"
-          ffprobe -v error -show_entries format=duration,size -of json "$GITHUB_WORKSPACE/output/tubeverse-demo.mp4" | tee "$GITHUB_WORKSPACE/output/ffprobe.json"
+          cp "$VIDEO" "$GITHUB_WORKSPACE/output/tubeverse-video.mp4"
+          ffprobe -v error -show_entries stream=codec_name,width,height -show_entries format=duration,size -of json "$GITHUB_WORKSPACE/output/tubeverse-video.mp4" | tee "$GITHUB_WORKSPACE/output/ffprobe.json"
+
+      - name: Transcribe and QA finished render with faster-whisper
+        run: |
+          python renderer/qa_transcribe.py output/tubeverse-video.mp4 output/qa-transcript.json --srt output/qa-transcript.srt --model tiny.en
 
       - name: Verify output
         run: |
-          test -s output/tubeverse-demo.mp4
+          test -s output/tubeverse-video.mp4
+          test -s output/qa-transcript.json
           python - <<'PY'
           import json, pathlib
-          p=pathlib.Path('output/ffprobe.json')
-          d=json.loads(p.read_text())
-          duration=float(d['format']['duration'])
-          size=int(d['format']['size'])
+          probe=json.loads(pathlib.Path('output/ffprobe.json').read_text())
+          qa=json.loads(pathlib.Path('output/qa-transcript.json').read_text())
+          duration=float(probe['format']['duration'])
+          size=int(probe['format']['size'])
           assert duration > 1, duration
           assert size > 10000, size
-          print({'duration':duration,'size':size})
+          assert qa['wordCount'] >= 3, qa['wordCount']
+          print({'duration':duration,'size':size,'transcribedWords':qa['wordCount']})
           PY
 
       - uses: actions/upload-artifact@v4
         with:
           name: tubeverse-video-${{ github.run_number }}
           path: |
-            output/tubeverse-demo.mp4
+            output/tubeverse-video.mp4
             output/mpt-result.json
             output/ffprobe.json
-          if-no-files-found: error
+            output/qa-transcript.json
+            output/qa-transcript.srt
+            output/voice-ffprobe.json
+            work/job/scene-plan.json
+            work/job/meta.json
+          if-no-files-found: warn
           retention-days: 7
