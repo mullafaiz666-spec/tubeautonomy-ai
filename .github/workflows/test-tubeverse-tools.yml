@@ -1,0 +1,48 @@
+name: Test TubeVerse Tools
+
+on:
+  push:
+    branches: [tubeverse-actions]
+    paths:
+      - 'renderer/**'
+      - 'publisher/**'
+      - '.github/workflows/test-tubeverse-tools.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tubeverse-tools-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tubeverse-actions
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile Python tools
+        run: |
+          python -m py_compile renderer/*.py publisher/*.py
+      - name: Test deterministic scene planner
+        run: |
+          python - <<'PY'
+          import sys
+          sys.path.insert(0, 'renderer')
+          from scene_plan import build_plan, keywords
+          plan = build_plan('AI video systems create scenes. Video systems then render results.', 6)
+          assert len(plan) == 2, plan
+          assert 'video' in keywords('video video AI'), keywords('video video AI')
+          assert plan[0]['keywords'], plan
+          print(plan)
+          PY
+      - name: Verify publisher safety defaults
+        run: |
+          grep -q -- '--confirm-upload' publisher/youtube_upload.py
+          grep -q 'default="private"' publisher/youtube_upload.py
+          grep -q '1280, 720' publisher/thumbnail.py
