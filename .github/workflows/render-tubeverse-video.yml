@@ -44,9 +44,14 @@ jobs:
 
       - name: Install TubeVerse AI tools
         run: |
+          # This runner is CPU-only. Install CPU PyTorch first so Kokoro does not
+          # pull multi-gigabyte CUDA wheels that can never be used here.
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
           python -m pip install 'kokoro>=0.9.4' soundfile 'faster-whisper>=1.1.0' yt-dlp
           python - <<'PY'
           import importlib.metadata as m
+          import torch
+          print('torch', torch.__version__, 'cuda_available', torch.cuda.is_available())
           for pkg in ['kokoro','faster-whisper','yt-dlp','soundfile']:
               print(pkg, m.version(pkg))
           PY
