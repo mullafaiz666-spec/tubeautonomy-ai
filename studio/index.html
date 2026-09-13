@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#070912" />
+  <title>TubeVerse Studio</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="mark">TV</span><div><strong>TubeVerse Studio</strong><small>Open video production system</small></div></div>
+    <div class="status"><span></span> GitHub renderer online</div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div>
+        <p class="eyebrow">TUBEAUTONOMY MEDIA ENGINE</p>
+        <h1>Script to verified MP4.<br><em>No paid video API required.</em></h1>
+        <p class="lead">Build a render job for the GitHub Actions engine. MoneyPrinterTurbo composes the video, Kokoro creates local neural voice, and faster-whisper verifies the finished audio.</p>
+      </div>
+      <div class="architecture">
+        <span>Scene plan</span><b>→</b><span>Kokoro</span><b>→</b><span>MoneyPrinter</span><b>→</b><span>Whisper QA</span><b>→</b><span>MP4</span>
+      </div>
+    </section>
+
+    <section class="grid">
+      <form id="jobForm" class="panel composer">
+        <div class="panelHead"><div><p class="eyebrow">CREATE</p><h2>Render job</h2></div><span class="pill">v2</span></div>
+        <label>Title<input id="title" maxlength="120" value="The next generation of autonomous video" /></label>
+        <label>Script<textarea id="script" rows="9">TubeVerse turns a script into a finished vertical video. A local scene planner creates visual beats. Kokoro generates the narration without a paid voice API. MoneyPrinterTurbo assembles the footage and subtitles. Finally, faster-whisper checks the rendered audio before the video is accepted.</textarea></label>
+        <div class="row">
+          <label>Aspect<select id="aspect"><option>9:16</option><option>16:9</option><option>1:1</option></select></label>
+          <label>Voice<select id="voice"><option value="kokoro">Kokoro local</option><option value="edge">Edge fallback</option></select></label>
+        </div>
+        <label>Owned/licensed media URLs <small>optional, one per line</small><textarea id="media" rows="3" placeholder="https://…"></textarea></label>
+        <div class="actions">
+          <button type="submit" class="primary">Build job JSON</button>
+          <button type="button" id="download" class="secondary">Download JSON</button>
+        </div>
+      </form>
+
+      <aside class="panel output">
+        <div class="panelHead"><div><p class="eyebrow">OUTPUT</p><h2>Job manifest</h2></div><span id="validity" class="pill success">valid</span></div>
+        <pre id="json"></pre>
+        <div class="quickLinks">
+          <a href="https://github.com/mullafaiz666-spec/tubeautonomy-ai/actions/workflows/render-tubeverse-video.yml" target="_blank" rel="noreferrer">Open render actions ↗</a>
+          <a href="https://github.com/mullafaiz666-spec/tubeautonomy-ai/tree/tubeverse-actions" target="_blank" rel="noreferrer">Open renderer branch ↗</a>
+        </div>
+      </aside>
+    </section>
+
+    <section class="panel tools">
+      <div class="panelHead"><div><p class="eyebrow">TOOLS</p><h2>Active production stack</h2></div><span class="pill success">real</span></div>
+      <div class="toolGrid">
+        <article><strong>MoneyPrinterTurbo</strong><span>Video composition</span><small>script · local footage · subtitles · FFmpeg</small></article>
+        <article><strong>Kokoro 82M</strong><span>Local neural TTS</span><small>open weights · no ElevenLabs key</small></article>
+        <article><strong>faster-whisper</strong><span>Render QA</span><small>CPU int8 transcription · speech verification</small></article>
+        <article><strong>Scene Planner</strong><span>Visual beats</span><small>zero-key deterministic fallback</small></article>
+        <article><strong>yt-dlp</strong><span>Media ingestion</span><small>explicit owned/licensed URLs only</small></article>
+        <article><strong>GitHub Actions</strong><span>Free render compute</span><small>public-repo hosted runner · artifacts</small></article>
+      </div>
+    </section>
+
+    <section class="panel instructions">
+      <p class="eyebrow">RENDER</p><h2>Current operator flow</h2>
+      <ol><li>Create the manifest above and download it.</li><li>Add it under <code>render-queue/</code> on the <code>tubeverse-actions</code> branch.</li><li>The render workflow starts automatically and validates the output.</li><li>Download the verified MP4 from the workflow artifact.</li></ol>
+      <p class="note">Next integration: TubeAutonomy will submit these manifests automatically, removing the manual GitHub step.</p>
+    </section>
+  </main>
+
+  <footer>TubeVerse AI · open render architecture · only use media you own or are licensed to reuse.</footer>
+  <script src="/app.js"></script>
+</body>
+</html>
