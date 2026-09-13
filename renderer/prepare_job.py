@@ -39,7 +39,7 @@ meta = {
 (out_dir / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
 # Deterministic multi-scene fallback. It guarantees a real video even when no
-# stock-media/API provider is configured. MoneyPrinterTurbo later adds the
+# stock/open-media provider returns usable content. MoneyPrinterTurbo later adds
 # narration, subtitles and final composition.
 size = {"9:16": "540x960", "16:9": "960x540", "1:1": "720x720"}[aspect]
 font_bold = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
@@ -62,15 +62,17 @@ for scene in plan:
     keyword_line = "  •  ".join(scene.get("keywords") or ["TubeVerse"])
     scene_file = out_dir / f"scene-{idx:02}.mp4"
     scene_files.append(scene_file)
+    # Keep the fallback brand line deliberately short so it never clips in
+    # portrait output. The full user title still remains in metadata/output.
     filter_graph = (
-        f"drawtext=fontfile={font_bold}:text='{esc(title)}':fontcolor=white:fontsize=30:"
-        "x=(w-text_w)/2:y=h*0.39," 
+        f"drawtext=fontfile={font_bold}:text='TUBEVERSE AI':fontcolor=white:fontsize=34:"
+        "x=(w-text_w)/2:y=h*0.36," 
         f"drawtext=fontfile={font_regular}:text='SCENE {idx:02}':fontcolor=0xa78bfa:fontsize=22:"
-        "x=(w-text_w)/2:y=h*0.47," 
-        f"drawtext=fontfile={font_regular}:text='{esc(keyword_line[:90])}':fontcolor=0xd1d5db:fontsize=20:"
-        "x=(w-text_w)/2:y=h*0.53," 
+        "x=(w-text_w)/2:y=h*0.45," 
+        f"drawtext=fontfile={font_regular}:text='{esc(keyword_line[:72])}':fontcolor=0xd1d5db:fontsize=18:"
+        "x=(w-text_w)/2:y=h*0.52," 
         "drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:"
-        "text='TubeVerse autonomous render':fontcolor=0x94a3b8:fontsize=16:"
+        "text='autonomous open video render':fontcolor=0x94a3b8:fontsize=16:"
         "x=(w-text_w)/2:y=h*0.88"
     )
     subprocess.run(
