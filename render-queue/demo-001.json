@@ -1,0 +1,5 @@
+{
+  "title": "TubeVerse AI — First Real Render",
+  "aspectRatio": "9:16",
+  "script": "This is TubeVerse AI running a real automated video pipeline. The render is created on a free public GitHub Actions runner using MoneyPrinterTurbo, local media, neural text to speech, subtitles, and FFmpeg. This test proves the system can produce an actual MP4 instead of only showing a dashboard."
+}
