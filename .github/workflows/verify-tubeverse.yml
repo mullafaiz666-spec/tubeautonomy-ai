@@ -1,0 +1,47 @@
+name: Verify TubeVerse
+
+on:
+  push:
+    branches: [tubeverse-netlify]
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Static integration checks
+        run: |
+          node --check tubeverse-overlay/patch-moneyprinter.mjs
+          python -m py_compile moneyprinter-worker/worker.py
+          test -s moneyprinter-worker/TubeVerse-MoneyPrinter-Worker.zip.b64
+          grep -q '79d7d122ae09ad9e294afff787a473401026f681' moneyprinter-worker/README.md
+
+      - name: Reconstruct TubeVerse runtime
+        run: node tubeverse-migration/unpack.mjs
+
+      - name: Verify MoneyPrinter wiring
+        run: |
+          grep -q 'value="moneyprinter"' tubeverse-runtime/pages/_index.tsx
+          grep -q '"moneyprinter"' tubeverse-runtime/endpoints/jobs_POST.schema.ts
+          grep -q '"moneyprinter"' tubeverse-runtime/endpoints/workers_POST.schema.ts
+          test -s tubeverse-runtime/public/workers/moneyprinter/TubeVerse-MoneyPrinter-Worker.zip
+
+      - name: Install dependencies
+        run: npm --prefix tubeverse-runtime install --no-audit --no-fund
+
+      - name: Build
+        run: npm --prefix tubeverse-runtime run build
+
+      - name: Tests
+        run: npm --prefix tubeverse-runtime test --if-present
