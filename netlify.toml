@@ -1,13 +1,17 @@
 [build]
-  command = "node tubeverse-migration/unpack.mjs && npm --prefix tubeverse-runtime install --no-audit --no-fund && npm --prefix tubeverse-runtime run build"
-  publish = "tubeverse-runtime/dist"
-
-[functions]
-  directory = "tubeverse-runtime/netlify/functions"
-  node_bundler = "esbuild"
+  command = "echo 'TubeVerse Studio static build'"
+  publish = "studio"
 
 [build.environment]
   NODE_VERSION = "22"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    X-Frame-Options = "DENY"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
 
 [[redirects]]
   from = "/*"
