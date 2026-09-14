@@ -1,0 +1,58 @@
+name: TubeAutonomy Learning Loop
+
+on:
+  schedule:
+    - cron: '30 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tubeautonomy-learning
+  cancel-in-progress: true
+
+jobs:
+  learn:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tubeverse-actions
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Verify YouTube read credential
+        run: test -n "$YOUTUBE_API_KEY" || { echo 'Missing YOUTUBE_API_KEY'; exit 2; }
+
+      - name: Install API client
+        run: python -m pip install 'google-api-python-client>=2.170.0'
+
+      - name: Measure published video performance
+        run: python autonomy/analytics.py --history-dir publishing-history --output learning/channel-performance.json --limit 50
+
+      - name: Persist channel memory
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'TubeAutonomy Learning Agent'
+          git config user.email 'tubeautonomy-learning@users.noreply.github.com'
+          git add learning/channel-performance.json
+          if git diff --cached --quiet; then
+            echo 'No learning changes to commit.'
+            exit 0
+          fi
+          git commit -m 'autonomy: update channel performance memory'
+          git push origin HEAD:tubeverse-actions
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tubeautonomy-learning-${{ github.run_number }}
+          path: learning/channel-performance.json
+          retention-days: 30
