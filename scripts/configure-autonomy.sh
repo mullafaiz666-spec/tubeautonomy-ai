@@ -57,12 +57,43 @@ gh variable set AUTONOMY_REGION --repo "$REPO" --body "$AUTONOMY_REGION"
 gh variable set AUTONOMY_FORMAT --repo "$REPO" --body "$AUTONOMY_FORMAT"
 gh variable set YOUTUBE_PRIVACY --repo "$REPO" --body "$YOUTUBE_PRIVACY"
 
-echo "Credentials configured. Starting the first autonomous content run..."
-gh workflow run autonomous-content-factory.yml \
-  --repo "$REPO" \
-  --ref "$BRANCH" \
-  -f niche="$AUTONOMY_NICHE" \
-  -f region="$AUTONOMY_REGION" \
-  -f format="$AUTONOMY_FORMAT"
+upsert_branch_file() {
+  local path="$1"
+  local content="$2"
+  local message="$3"
+  local encoded sha
+  encoded="$(printf '%s' "$content" | base64 | tr -d '\n')"
+  sha="$(gh api "repos/$REPO/contents/$path?ref=$BRANCH" --jq '.sha' 2>/dev/null || true)"
+  if [ -n "$sha" ]; then
+    gh api "repos/$REPO/contents/$path" -X PUT \
+      -f message="$message" -f content="$encoded" -f branch="$BRANCH" -f sha="$sha" >/dev/null
+  else
+    gh api "repos/$REPO/contents/$path" -X PUT \
+      -f message="$message" -f content="$encoded" -f branch="$BRANCH" >/dev/null
+  fi
+}
 
-echo "Started. From now on the scheduled trend → write → render → QA → publish → learn loop runs without per-video approval."
+NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+ENABLED_JSON="$(python - "$NOW" "$AUTONOMY_NICHE" "$AUTONOMY_REGION" "$AUTONOMY_FORMAT" "$YOUTUBE_PRIVACY" <<'PY'
+import json,sys
+print(json.dumps({
+  'enabled': True,
+  'configuredAt': sys.argv[1],
+  'niche': sys.argv[2],
+  'region': sys.argv[3],
+  'format': sys.argv[4],
+  'privacy': sys.argv[5],
+}))
+PY
+)"
+upsert_branch_file "autonomy-enabled.json" "$ENABLED_JSON" "autonomy: enable zero-touch content factory"
+
+TRIGGER_JSON="$(python - "$NOW" <<'PY'
+import json,sys
+print(json.dumps({'triggeredAt': sys.argv[1], 'source': 'initial-secure-setup'}))
+PY
+)"
+echo "Credentials configured. Triggering the first autonomous content run on the isolated branch..."
+upsert_branch_file "autonomy-trigger/daily.json" "$TRIGGER_JSON" "autonomy: trigger first content cycle"
+
+echo "Started. Future heartbeat updates to autonomy-trigger/daily.json will run trend → write → render → QA → publish → learn without per-video approval."
