@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-"""Upload a verified TubeVerse MP4 to YouTube after explicit approval.
+"""Upload a machine-verified TubeVerse MP4 to YouTube.
 
 Secrets are read only from environment variables and are never stored in the
-repository. Uploading requires --confirm-upload. Privacy defaults to private.
+repository. Uploading requires --confirm-upload so callers must explicitly
+acknowledge that verification gates have passed. Privacy defaults to private.
 """
 from __future__ import annotations
 
 import argparse
+import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -27,11 +30,12 @@ def main() -> None:
     parser.add_argument("--category-id", default="28")
     parser.add_argument("--privacy", choices=["private", "unlisted", "public"], default="private")
     parser.add_argument("--thumbnail", default=None)
+    parser.add_argument("--result-json", default=None)
     parser.add_argument("--confirm-upload", action="store_true")
     args = parser.parse_args()
 
     if not args.confirm_upload:
-        raise SystemExit("refusing upload: --confirm-upload is required after human approval")
+        raise SystemExit("refusing upload: --confirm-upload is required after verification")
     video = Path(args.video)
     if not video.is_file() or video.stat().st_size < 10_000:
         raise SystemExit(f"invalid video file: {video}")
@@ -79,7 +83,19 @@ def main() -> None:
             media_body=MediaFileUpload(str(thumb), mimetype="image/jpeg"),
         ).execute()
 
-    print({"videoId": video_id, "privacy": args.privacy, "url": f"https://youtu.be/{video_id}"})
+    result = {
+        "videoId": video_id,
+        "privacy": args.privacy,
+        "url": f"https://youtu.be/{video_id}",
+        "title": args.title[:100],
+        "publishedBy": "tubeautonomy-autopilot",
+        "uploadedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    }
+    if args.result_json:
+        out = Path(args.result_json)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(result, indent=2), encoding="utf-8")
+    print(json.dumps(result))
 
 
 if __name__ == "__main__":
