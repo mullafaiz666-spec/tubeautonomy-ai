@@ -67,14 +67,15 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r autonomy/requirements.txt
 
-      - name: Scan trends, research, write and enforce originality
+      - name: Scan trends, learn, write and enforce originality
         run: |
-          python autonomy/pipeline.py \
+          python autonomy/run_factory.py \
             --niche "$AUTONOMY_NICHE" \
             --region "$AUTONOMY_REGION" \
             --format "$AUTONOMY_FORMAT" \
             --lookback-hours "$AUTONOMY_LOOKBACK_HOURS" \
             --top-videos "$AUTONOMY_TOP_VIDEOS" \
+            --memory learning/channel-performance.json \
             --result-file autonomy-result.json
 
       - name: Resolve generated render job
