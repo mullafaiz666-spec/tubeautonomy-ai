@@ -1,0 +1,119 @@
+name: TubeAutonomy Verified YouTube Publisher
+
+on:
+  workflow_run:
+    workflows: ["TubeVerse Render Video"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  publish:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+      YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+      YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+      YOUTUBE_PRIVACY: ${{ vars.YOUTUBE_PRIVACY || 'public' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tubeverse-actions
+
+      - name: Download verified render artifact
+        uses: actions/download-artifact@v4
+        with:
+          pattern: tubeverse-video-*
+          path: downloaded
+          merge-multiple: true
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Confirm this is an autonomous publishable job
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          JOB_FILE="$(find downloaded -type f -path '*/render-queue/auto-*.json' -o -type f -name 'auto-*.json' | head -n1 || true)"
+          VIDEO_FILE="$(find downloaded -type f -name 'tubeverse-video.mp4' | head -n1 || true)"
+          QA_FILE="$(find downloaded -type f -name 'autonomy-qa.json' | head -n1 || true)"
+          if [ -z "$JOB_FILE" ] || [ -z "$VIDEO_FILE" ] || [ -z "$QA_FILE" ]; then
+            echo 'eligible=false' >> "$GITHUB_OUTPUT"
+            echo 'Render was not produced by the autonomous factory; nothing will be published.'
+            exit 0
+          fi
+          python - "$JOB_FILE" "$QA_FILE" <<'PY'
+          import json,sys
+          job=json.load(open(sys.argv[1]))
+          qa=json.load(open(sys.argv[2]))
+          assert job.get('source') == 'tubeautonomy-autopilot', job.get('source')
+          assert qa.get('passed') is True, qa
+          assert (job.get('autonomy') or {}).get('originality',{}).get('passed') is True
+          PY
+          echo 'eligible=true' >> "$GITHUB_OUTPUT"
+          echo "job_file=$JOB_FILE" >> "$GITHUB_OUTPUT"
+          echo "video_file=$VIDEO_FILE" >> "$GITHUB_OUTPUT"
+          echo "qa_file=$QA_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Verify YouTube credentials
+        if: ${{ steps.meta.outputs.eligible == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$YOUTUBE_CLIENT_ID" || { echo 'Missing YOUTUBE_CLIENT_ID'; exit 2; }
+          test -n "$YOUTUBE_CLIENT_SECRET" || { echo 'Missing YOUTUBE_CLIENT_SECRET'; exit 2; }
+          test -n "$YOUTUBE_REFRESH_TOKEN" || { echo 'Missing YOUTUBE_REFRESH_TOKEN'; exit 2; }
+
+      - uses: actions/setup-python@v5
+        if: ${{ steps.meta.outputs.eligible == 'true' }}
+        with:
+          python-version: '3.11'
+
+      - name: Install publishing tools
+        if: ${{ steps.meta.outputs.eligible == 'true' }}
+        run: python -m pip install -r publisher/requirements.txt
+
+      - name: Prepare original metadata and thumbnail
+        id: publish_meta
+        if: ${{ steps.meta.outputs.eligible == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p publish
+          python - '${{ steps.meta.outputs.job_file }}' <<'PY'
+          import json, pathlib, sys
+          job=json.load(open(sys.argv[1]))
+          pathlib.Path('publish/title.txt').write_text(str(job['title'])[:100], encoding='utf-8')
+          pathlib.Path('publish/description.txt').write_text(str(job.get('description',''))[:5000], encoding='utf-8')
+          pathlib.Path('publish/tags.txt').write_text(','.join(str(x) for x in job.get('tags',[])[:30]), encoding='utf-8')
+          pathlib.Path('publish/thumb.txt').write_text(str(job.get('thumbnailText') or job['title'])[:95], encoding='utf-8')
+          PY
+          python publisher/thumbnail.py --title "$(cat publish/thumb.txt)" --output publish/thumbnail.jpg
+
+      - name: Publish automatically after machine verification
+        if: ${{ steps.meta.outputs.eligible == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python publisher/youtube_upload.py '${{ steps.meta.outputs.video_file }}' \
+            --title "$(cat publish/title.txt)" \
+            --description "$(cat publish/description.txt)" \
+            --tags "$(cat publish/tags.txt)" \
+            --privacy "$YOUTUBE_PRIVACY" \
+            --thumbnail publish/thumbnail.jpg \
+            --confirm-upload | tee publish/youtube-result.txt
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ steps.meta.outputs.eligible == 'true' }}
+        with:
+          name: youtube-publish-${{ github.event.workflow_run.id }}
+          path: |
+            publish/thumbnail.jpg
+            publish/youtube-result.txt
+            ${{ steps.meta.outputs.qa_file }}
+          retention-days: 30
