@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
 
-from scene_plan import build_plan
+from scene_plan import build_plan, keywords as local_keywords
 
 job_path = Path(sys.argv[1])
 out_dir = Path(sys.argv[2])
@@ -24,23 +25,54 @@ if aspect not in {"9:16", "16:9", "1:1"}:
 (out_dir / "title.txt").write_text(title, encoding="utf-8")
 (out_dir / "script.txt").write_text(script, encoding="utf-8")
 
-plan = build_plan(script, max_scenes=6)
+
+def normalize_ai_scenes(raw: object) -> list[dict]:
+    if not isinstance(raw, list):
+        return []
+    result: list[dict] = []
+    for idx, item in enumerate(raw[:12], start=1):
+        if not isinstance(item, dict):
+            continue
+        narration = re.sub(r"\s+", " ", str(item.get("narration") or "")).strip()
+        visual_prompt = re.sub(r"\s+", " ", str(item.get("visualPrompt") or "")).strip()
+        raw_keywords = item.get("keywords") or []
+        keys = [str(x).strip().lower() for x in raw_keywords if str(x).strip()][:6] if isinstance(raw_keywords, list) else []
+        if not keys:
+            keys = local_keywords(visual_prompt or narration)
+        if not narration and not visual_prompt:
+            continue
+        result.append({
+            "index": idx,
+            "narration": narration or f"Scene {idx}",
+            "keywords": keys,
+            "visualPrompt": visual_prompt or f"cinematic editorial b-roll illustrating: {narration}",
+            "source": "ai-visual-director",
+        })
+    return result
+
+
+plan = normalize_ai_scenes(job.get("scenes"))
+plan_engine = "tubeautonomy-visual-director" if plan else "tubeverse-local"
+if not plan:
+    plan = build_plan(script, max_scenes=6)
 (out_dir / "scene-plan.json").write_text(
-    json.dumps({"version": 1, "engine": "tubeverse-local", "scenes": plan}, indent=2),
+    json.dumps({"version": 1, "engine": plan_engine, "scenes": plan}, indent=2),
     encoding="utf-8",
 )
 meta = {
     "title": title,
     "aspectRatio": aspect,
     "sceneCount": len(plan),
+    "scenePlanEngine": plan_engine,
     "voiceEngine": str(job.get("voiceEngine") or "kokoro"),
     "mediaUrls": job.get("mediaUrls") or [],
+    "source": job.get("source") or "manual",
 }
 (out_dir / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
-# Deterministic multi-scene fallback. It guarantees a real video even when no
-# stock/open-media provider returns usable content. MoneyPrinterTurbo later adds
-# narration, subtitles and final composition.
+# Deterministic scene-card fallback. These cards guarantee a render even when
+# open-license search or a GPU visual worker is unavailable. The scene keywords
+# now come from the AI visual director when an autonomous job supplies them.
 size = {"9:16": "540x960", "16:9": "960x540", "1:1": "720x720"}[aspect]
 font_bold = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 font_regular = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
@@ -62,15 +94,13 @@ for scene in plan:
     keyword_line = "  •  ".join(scene.get("keywords") or ["TubeVerse"])
     scene_file = out_dir / f"scene-{idx:02}.mp4"
     scene_files.append(scene_file)
-    # Keep the fallback brand line deliberately short so it never clips in
-    # portrait output. The full user title still remains in metadata/output.
     filter_graph = (
         f"drawtext=fontfile={font_bold}:text='TUBEVERSE AI':fontcolor=white:fontsize=34:"
-        "x=(w-text_w)/2:y=h*0.36," 
+        "x=(w-text_w)/2:y=h*0.36,"
         f"drawtext=fontfile={font_regular}:text='SCENE {idx:02}':fontcolor=0xa78bfa:fontsize=22:"
-        "x=(w-text_w)/2:y=h*0.45," 
+        "x=(w-text_w)/2:y=h*0.45,"
         f"drawtext=fontfile={font_regular}:text='{esc(keyword_line[:72])}':fontcolor=0xd1d5db:fontsize=18:"
-        "x=(w-text_w)/2:y=h*0.52," 
+        "x=(w-text_w)/2:y=h*0.52,"
         "drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:"
         "text='autonomous open video render':fontcolor=0x94a3b8:fontsize=16:"
         "x=(w-text_w)/2:y=h*0.88"
@@ -96,14 +126,11 @@ subprocess.run(
     check=True,
 )
 
-print(
-    json.dumps(
-        {
-            "title": title,
-            "aspectRatio": aspect,
-            "background": str(bg),
-            "scriptChars": len(script),
-            "scenes": len(plan),
-        }
-    )
-)
+print(json.dumps({
+    "title": title,
+    "aspectRatio": aspect,
+    "background": str(bg),
+    "scriptChars": len(script),
+    "scenes": len(plan),
+    "scenePlanEngine": plan_engine,
+}))
