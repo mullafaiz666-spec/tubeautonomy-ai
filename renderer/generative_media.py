@@ -28,7 +28,6 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 import time
 import uuid
 from pathlib import Path
@@ -83,8 +82,6 @@ def choose_prompt_node(workflow: dict[str, Any]) -> str:
             raise ValueError(f"COMFYUI_PROMPT_NODE={explicit!r} is not present in workflow")
         return explicit
 
-    # Prefer known positive text encoders; otherwise accept the first node with a
-    # string `text` input. Operators can pin the exact node through the env var.
     for node_id, node in workflow.items():
         if not isinstance(node, dict):
             continue
@@ -103,7 +100,6 @@ def choose_prompt_node(workflow: dict[str, Any]) -> str:
 def inject_scene(workflow: dict[str, Any], node_id: str, prompt: str, seed: int) -> dict[str, Any]:
     result = copy.deepcopy(workflow)
     result[node_id].setdefault("inputs", {})["text"] = prompt
-    # Randomize each scene without depending on a particular sampler/node name.
     for node in result.values():
         if not isinstance(node, dict) or not isinstance(node.get("inputs"), dict):
             continue
@@ -169,22 +165,31 @@ def download_output(base: str, descriptor: dict[str, str], destination: Path) ->
     return target
 
 
-def to_scene_mp4(source: Path, destination: Path, seconds: float) -> None:
+def target_size(aspect: str) -> tuple[int, int]:
+    return {"9:16": (1080, 1920), "16:9": (1920, 1080), "1:1": (1080, 1080)}[aspect]
+
+
+def to_scene_mp4(source: Path, destination: Path, seconds: float, aspect: str) -> None:
+    width, height = target_size(aspect)
     suffix = source.suffix.lower()
     if suffix == ".mp4":
-        shutil.copy2(source, destination)
+        subprocess.run([
+            "ffmpeg", "-y", "-i", str(source), "-an",
+            "-vf", f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},format=yuv420p",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", str(destination)
+        ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return
     if suffix in {".webm", ".mov", ".mkv", ".gif"}:
         subprocess.run([
-            "ffmpeg", "-y", "-i", str(source), "-an", "-c:v", "libx264",
-            "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", str(destination)
+            "ffmpeg", "-y", "-i", str(source), "-an",
+            "-vf", f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},format=yuv420p",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", str(destination)
         ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return
-    # Still image -> subtle Ken Burns clip, suitable for MoneyPrinter assembly.
     subprocess.run([
         "ffmpeg", "-y", "-loop", "1", "-i", str(source), "-t", str(seconds),
-        "-vf", "scale=1080:-2:force_original_aspect_ratio=increase,crop=1080:1920,"
-               "zoompan=z='min(zoom+0.0008,1.08)':d=1:s=1080x1920:fps=30,format=yuv420p",
+        "-vf", f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},"
+               f"zoompan=z='min(zoom+0.0008,1.08)':d=1:s={width}x{height}:fps=30,format=yuv420p",
         "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", str(destination)
     ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
@@ -194,6 +199,7 @@ def main() -> None:
     ap.add_argument("scene_plan")
     ap.add_argument("output_dir")
     ap.add_argument("--manifest", default=None)
+    ap.add_argument("--aspect", choices=["9:16", "16:9", "1:1"], default="9:16")
     args = ap.parse_args()
 
     out_dir = Path(args.output_dir)
@@ -220,7 +226,6 @@ def main() -> None:
     scenes = scene_plan.get("scenes") or []
     results: list[dict[str, Any]] = []
 
-    # Health check. A dead GPU server must never block the fallback render path.
     try:
         request_json(f"{base}/system_stats", timeout=15)
     except Exception as exc:
@@ -242,12 +247,10 @@ def main() -> None:
             descriptors = output_descriptors(history)
             if not descriptors:
                 raise RuntimeError("ComfyUI completed but returned no downloadable visual output")
-
-            # Prefer actual video/gif outputs over still images.
             descriptors.sort(key=lambda d: {"videos": 0, "gifs": 1, "images": 2}.get(d["kind"], 9))
             source = download_output(base, descriptors[0], out_dir / f"source-{idx:02}")
             scene_mp4 = out_dir / f"scene-{idx:02}.mp4"
-            to_scene_mp4(source, scene_mp4, scene_seconds)
+            to_scene_mp4(source, scene_mp4, scene_seconds, args.aspect)
             record.update({
                 "status": "generated",
                 "promptId": prompt_id,
@@ -264,12 +267,13 @@ def main() -> None:
         "enabled": True,
         "engine": "comfyui",
         "promptNode": prompt_node,
+        "aspect": args.aspect,
         "generated": generated,
         "requested": len(scenes),
         "scenes": results,
     }
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-    print(json.dumps({"engine": "comfyui", "generated": generated, "requested": len(scenes)}))
+    print(json.dumps({"engine": "comfyui", "generated": generated, "requested": len(scenes), "aspect": args.aspect}))
 
 
 if __name__ == "__main__":
