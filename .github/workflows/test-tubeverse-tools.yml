@@ -9,6 +9,8 @@ on:
       - 'autonomy/**'
       - '.github/workflows/autonomous-content-factory.yml'
       - '.github/workflows/autonomous-youtube-publish.yml'
+      - '.github/workflows/autonomy-learning.yml'
+      - '.github/workflows/render-tubeverse-video.yml'
       - '.github/workflows/test-tubeverse-tools.yml'
   workflow_dispatch:
 
@@ -44,13 +46,40 @@ jobs:
           assert plan[0]['keywords'], plan
           print(plan)
           PY
+      - name: Test visual worker fallback without GPU secrets
+        run: |
+          mkdir -p /tmp/tubeverse-generated
+          printf '%s\n' '{"scenes":[{"index":1,"visualPrompt":"original futuristic newsroom"}]}' > /tmp/scene-plan.json
+          python renderer/generative_media.py /tmp/scene-plan.json /tmp/tubeverse-generated
+          python - <<'PY'
+          import json
+          data=json.load(open('/tmp/tubeverse-generated/manifest.json'))
+          assert data['enabled'] is False, data
+          assert data['generated'] == 0, data
+          print(data)
+          PY
+      - name: Test manual render cannot become autonomous publish signal
+        run: |
+          printf '%s\n' '{"title":"Manual Test","script":"This is a manual render and must never auto publish."}' > /tmp/manual-job.json
+          python autonomy/qa_gate.py /tmp/manual-job.json /tmp/not-needed.json /tmp/not-needed-probe.json --report /tmp/manual-qa.json
+          python - <<'PY'
+          import json
+          data=json.load(open('/tmp/manual-qa.json'))
+          assert data['skipped'] is True, data
+          assert data['eligibleForAutoPublish'] is False, data
+          assert data['passed'] is False, data
+          print(data)
+          PY
       - name: Verify autonomous safety gates
         run: |
           grep -q 'ORIGINALITY_SEMANTIC_MAX' autonomy/pipeline.py
           grep -q 'originalityPassed' autonomy/qa_gate.py
+          grep -q 'eligibleForAutoPublish' autonomy/qa_gate.py
           grep -q 'source.*tubeautonomy-autopilot' autonomy/pipeline.py
           grep -q 'workflow_run' .github/workflows/autonomous-youtube-publish.yml
           grep -q -- '--confirm-upload' .github/workflows/autonomous-youtube-publish.yml
+          grep -q 'publishing-history' .github/workflows/autonomous-youtube-publish.yml
+          grep -q 'channel-performance.json' .github/workflows/autonomy-learning.yml
       - name: Verify publisher safety defaults
         run: |
           grep -q -- '--confirm-upload' publisher/youtube_upload.py
