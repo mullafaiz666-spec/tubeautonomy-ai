@@ -1,6 +1,13 @@
 name: TubeVerse Render Video
 
 on:
+  workflow_call:
+    inputs:
+      job_file:
+        description: Render job JSON path
+        required: false
+        type: string
+        default: render-queue/demo-001.json
   push:
     branches: [tubeverse-actions]
     paths:
@@ -18,13 +25,15 @@ permissions:
   contents: read
 
 concurrency:
-  group: tubeverse-render-${{ github.ref }}
+  group: tubeverse-render-${{ github.ref }}-${{ inputs.job_file || 'branch' }}
   cancel-in-progress: true
 
 jobs:
   render:
     runs-on: ubuntu-latest
     timeout-minutes: 55
+    outputs:
+      autonomous: ${{ steps.job.outputs.autonomous }}
     env:
       MPT_COMMIT: cf5a3aedad1741d012152d355aa909d224fc4557
     steps:
@@ -59,7 +68,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          JOB_FILE='${{ github.event.inputs.job_file }}'
+          JOB_FILE='${{ inputs.job_file }}'
           if [ -z "$JOB_FILE" ]; then
             JOB_FILE="$(git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" | grep '^render-queue/.*\.json$' | head -n1 || true)"
           fi
@@ -257,3 +266,139 @@ jobs:
             ${{ steps.job.outputs.job_file }}
           if-no-files-found: warn
           retention-days: 7
+
+  publish:
+    needs: render
+    if: ${{ needs.render.outputs.autonomous == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      actions: read
+      contents: write
+    env:
+      YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+      YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+      YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+      YOUTUBE_PRIVACY: ${{ vars.YOUTUBE_PRIVACY || 'public' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tubeverse-actions
+          fetch-depth: 0
+
+      - name: Download machine-verified render
+        uses: actions/download-artifact@v4
+        with:
+          name: tubeverse-video-${{ github.run_number }}
+          path: downloaded
+
+      - name: Locate and verify autonomous artifact
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          JOB_FILE="$(find downloaded -type f \( -path '*/render-queue/auto-*.json' -o -name 'auto-*.json' \) | head -n1 || true)"
+          VIDEO_FILE="$(find downloaded -type f -name 'tubeverse-video.mp4' | head -n1 || true)"
+          QA_FILE="$(find downloaded -type f -name 'autonomy-qa.json' | head -n1 || true)"
+          test -n "$JOB_FILE" && test -s "$JOB_FILE"
+          test -n "$VIDEO_FILE" && test -s "$VIDEO_FILE"
+          test -n "$QA_FILE" && test -s "$QA_FILE"
+          python - "$JOB_FILE" "$QA_FILE" <<'PY'
+          import json,sys
+          job=json.load(open(sys.argv[1]))
+          qa=json.load(open(sys.argv[2]))
+          assert job.get('source') == 'tubeautonomy-autopilot', job.get('source')
+          assert qa.get('passed') is True, qa
+          assert qa.get('eligibleForAutoPublish') is True, qa
+          assert (job.get('autonomy') or {}).get('originality',{}).get('passed') is True
+          PY
+          echo "job_file=$JOB_FILE" >> "$GITHUB_OUTPUT"
+          echo "video_file=$VIDEO_FILE" >> "$GITHUB_OUTPUT"
+          echo "qa_file=$QA_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Verify YouTube credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$YOUTUBE_CLIENT_ID" || { echo 'Missing YOUTUBE_CLIENT_ID'; exit 2; }
+          test -n "$YOUTUBE_CLIENT_SECRET" || { echo 'Missing YOUTUBE_CLIENT_SECRET'; exit 2; }
+          test -n "$YOUTUBE_REFRESH_TOKEN" || { echo 'Missing YOUTUBE_REFRESH_TOKEN'; exit 2; }
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install publishing tools
+        run: python -m pip install -r publisher/requirements.txt
+
+      - name: Prepare metadata and thumbnail
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p publish
+          python - '${{ steps.meta.outputs.job_file }}' <<'PY'
+          import json, pathlib, sys
+          job=json.load(open(sys.argv[1]))
+          pathlib.Path('publish/title.txt').write_text(str(job['title'])[:100], encoding='utf-8')
+          pathlib.Path('publish/description.txt').write_text(str(job.get('description',''))[:5000], encoding='utf-8')
+          pathlib.Path('publish/tags.txt').write_text(','.join(str(x) for x in job.get('tags',[])[:30]), encoding='utf-8')
+          pathlib.Path('publish/thumb.txt').write_text(str(job.get('thumbnailText') or job['title'])[:95], encoding='utf-8')
+          PY
+          python publisher/thumbnail.py --title "$(cat publish/thumb.txt)" --output publish/thumbnail.jpg
+
+      - name: Publish to YouTube after machine verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          python publisher/youtube_upload.py '${{ steps.meta.outputs.video_file }}' \
+            --title "$(cat publish/title.txt)" \
+            --description "$(cat publish/description.txt)" \
+            --tags "$(cat publish/tags.txt)" \
+            --privacy "$YOUTUBE_PRIVACY" \
+            --thumbnail publish/thumbnail.jpg \
+            --result-json publish/youtube-result.json \
+            --confirm-upload | tee publish/youtube-result.txt
+          test -s publish/youtube-result.json
+
+      - name: Persist publication for learning
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin tubeverse-actions
+          git reset --hard origin/tubeverse-actions
+          mkdir -p publishing-history
+          python - '${{ steps.meta.outputs.job_file }}' publish/youtube-result.json "$GITHUB_RUN_ID" <<'PY'
+          import json, pathlib, sys
+          job=json.load(open(sys.argv[1]))
+          result=json.load(open(sys.argv[2]))
+          auto=job.get('autonomy') or {}
+          history={
+              **result,
+              'sourceRunId': job.get('id'),
+              'publisherWorkflowRunId': sys.argv[3],
+              'niche': auto.get('niche'),
+              'angle': auto.get('angle'),
+              'hook': auto.get('hook'),
+              'format': auto.get('format'),
+              'originality': auto.get('originality'),
+              'trendSourceVideoIds': auto.get('sourceVideoIds') or [],
+          }
+          target=pathlib.Path('publishing-history') / f"{result['videoId']}.json"
+          target.write_text(json.dumps(history, indent=2, ensure_ascii=False), encoding='utf-8')
+          print(target)
+          PY
+          git config user.name 'TubeAutonomy Publisher'
+          git config user.email 'tubeautonomy-publisher@users.noreply.github.com'
+          git add publishing-history/*.json
+          git commit -m "autonomy: record YouTube publication $(python -c "import json; print(json.load(open('publish/youtube-result.json'))['videoId'])")"
+          git push origin HEAD:tubeverse-actions
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: youtube-publish-${{ github.run_number }}
+          path: |
+            publish/thumbnail.jpg
+            publish/youtube-result.txt
+            publish/youtube-result.json
+            ${{ steps.meta.outputs.qa_file }}
+          retention-days: 30
