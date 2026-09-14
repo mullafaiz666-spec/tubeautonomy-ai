@@ -44,8 +44,6 @@ jobs:
 
       - name: Install TubeVerse AI tools
         run: |
-          # This runner is CPU-only. Install CPU PyTorch first so Kokoro does not
-          # pull multi-gigabyte CUDA wheels that can never be used here.
           python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
           python -m pip install 'kokoro>=0.9.4' soundfile 'faster-whisper>=1.1.0' yt-dlp
           python - <<'PY'
@@ -125,8 +123,7 @@ jobs:
 
       - name: Install MoneyPrinterTurbo
         working-directory: .runtime/MoneyPrinterTurbo
-        run: |
-          uv sync --frozen
+        run: uv sync --frozen
 
       - name: Render real MP4
         shell: bash
@@ -184,7 +181,7 @@ jobs:
         run: |
           python renderer/qa_transcribe.py output/tubeverse-video.mp4 output/qa-transcript.json --srt output/qa-transcript.srt --model tiny.en
 
-      - name: Verify output
+      - name: Verify output media
         run: |
           test -s output/tubeverse-video.mp4
           test -s output/qa-transcript.json
@@ -200,6 +197,10 @@ jobs:
           print({'duration':duration,'size':size,'transcribedWords':qa['wordCount']})
           PY
 
+      - name: Autonomous publish quality gate
+        run: |
+          python autonomy/qa_gate.py '${{ steps.job.outputs.job_file }}' output/qa-transcript.json output/ffprobe.json --report output/autonomy-qa.json
+
       - uses: actions/upload-artifact@v4
         with:
           name: tubeverse-video-${{ github.run_number }}
@@ -210,8 +211,10 @@ jobs:
             output/qa-transcript.json
             output/qa-transcript.srt
             output/voice-ffprobe.json
+            output/autonomy-qa.json
             work/job/scene-plan.json
             work/job/meta.json
             work/job/commons/attribution.json
+            ${{ steps.job.outputs.job_file }}
           if-no-files-found: warn
           retention-days: 7
