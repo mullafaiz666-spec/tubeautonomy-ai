@@ -1,7 +1,14 @@
 name: TubeAutonomy Autonomous Content Factory
 
 on:
+  push:
+    branches: [tubeverse-actions]
+    paths:
+      - 'autonomy-trigger/**.json'
   schedule:
+    # GitHub schedules only execute from the default branch. This remains here
+    # for portability; the isolated branch is triggered by the external daily
+    # heartbeat instead of modifying main.
     - cron: '30 4 * * *'
   workflow_dispatch:
     inputs:
@@ -34,6 +41,9 @@ jobs:
   research-write-package:
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    outputs:
+      job_file: ${{ steps.result.outputs.job_file }}
+      meta_file: ${{ steps.result.outputs.meta_file }}
     env:
       YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -67,6 +77,16 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r autonomy/requirements.txt
 
+      - name: Refresh our own channel performance memory
+        shell: bash
+        run: |
+          set -euo pipefail
+          if find publishing-history -maxdepth 1 -type f -name '*.json' -print -quit 2>/dev/null | grep -q .; then
+            python autonomy/analytics.py --history-dir publishing-history --output learning/channel-performance.json --limit 50
+          else
+            echo 'No prior autonomous publications yet; writer starts without channel memory.'
+          fi
+
       - name: Scan trends, learn, write and enforce originality
         run: |
           python autonomy/run_factory.py \
@@ -98,17 +118,9 @@ jobs:
           git config user.name 'TubeAutonomy Agent'
           git config user.email 'tubeautonomy-agent@users.noreply.github.com'
           git add '${{ steps.result.outputs.job_file }}' '${{ steps.result.outputs.meta_file }}'
+          if [ -f learning/channel-performance.json ]; then git add learning/channel-performance.json; fi
           git commit -m "autonomy: create original render job $(basename '${{ steps.result.outputs.job_file }}')"
           git push origin HEAD:tubeverse-actions
-
-      - name: Dispatch verified job to TubeVerse renderer
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh workflow run render-tubeverse-video.yml \
-            --repo '${{ github.repository }}' \
-            --ref tubeverse-actions \
-            -f job_file='${{ steps.result.outputs.job_file }}'
 
       - uses: actions/upload-artifact@v4
         with:
@@ -117,4 +129,13 @@ jobs:
             autonomy-result.json
             ${{ steps.result.outputs.job_file }}
             ${{ steps.result.outputs.meta_file }}
+            learning/channel-performance.json
+          if-no-files-found: warn
           retention-days: 14
+
+  render-verify-publish:
+    needs: research-write-package
+    uses: ./.github/workflows/render-tubeverse-video.yml
+    with:
+      job_file: ${{ needs.research-write-package.outputs.job_file }}
+    secrets: inherit
