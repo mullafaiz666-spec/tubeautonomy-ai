@@ -6,6 +6,9 @@ on:
     paths:
       - 'renderer/**'
       - 'publisher/**'
+      - 'autonomy/**'
+      - '.github/workflows/autonomous-content-factory.yml'
+      - '.github/workflows/autonomous-youtube-publish.yml'
       - '.github/workflows/test-tubeverse-tools.yml'
   workflow_dispatch:
 
@@ -28,7 +31,7 @@ jobs:
           python-version: '3.11'
       - name: Compile Python tools
         run: |
-          python -m py_compile renderer/*.py publisher/*.py
+          python -m py_compile renderer/*.py publisher/*.py autonomy/*.py
       - name: Test deterministic scene planner
         run: |
           python - <<'PY'
@@ -41,6 +44,13 @@ jobs:
           assert plan[0]['keywords'], plan
           print(plan)
           PY
+      - name: Verify autonomous safety gates
+        run: |
+          grep -q 'ORIGINALITY_SEMANTIC_MAX' autonomy/pipeline.py
+          grep -q 'originalityPassed' autonomy/qa_gate.py
+          grep -q 'source.*tubeautonomy-autopilot' autonomy/pipeline.py
+          grep -q 'workflow_run' .github/workflows/autonomous-youtube-publish.yml
+          grep -q -- '--confirm-upload' .github/workflows/autonomous-youtube-publish.yml
       - name: Verify publisher safety defaults
         run: |
           grep -q -- '--confirm-upload' publisher/youtube_upload.py
