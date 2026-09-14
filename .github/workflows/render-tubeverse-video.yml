@@ -66,6 +66,13 @@ jobs:
           if [ -z "$JOB_FILE" ]; then JOB_FILE='render-queue/demo-001.json'; fi
           test -f "$JOB_FILE"
           echo "job_file=$JOB_FILE" >> "$GITHUB_OUTPUT"
+          AUTONOMOUS="$(python - "$JOB_FILE" <<'PY'
+          import json,sys
+          job=json.load(open(sys.argv[1], encoding='utf-8'))
+          print('true' if job.get('source') == 'tubeautonomy-autopilot' else 'false')
+          PY
+          )"
+          echo "autonomous=$AUTONOMOUS" >> "$GITHUB_OUTPUT"
           rm -rf work/job output .runtime/MoneyPrinterTurbo
           mkdir -p work/job output .runtime
           python renderer/prepare_job.py "$JOB_FILE" work/job
@@ -82,6 +89,27 @@ jobs:
           set -euo pipefail
           mkdir -p work/job/media
           python renderer/fetch_media.py '${{ steps.job.outputs.job_file }}' work/job/media
+
+      - name: Generate scene visuals with ComfyUI or LTX when configured
+        shell: bash
+        env:
+          COMFYUI_URL: ${{ secrets.COMFYUI_URL }}
+          COMFYUI_API_TOKEN: ${{ secrets.COMFYUI_API_TOKEN }}
+          COMFYUI_WORKFLOW_JSON: ${{ secrets.COMFYUI_WORKFLOW_JSON }}
+          COMFYUI_PROMPT_NODE: ${{ vars.COMFYUI_PROMPT_NODE }}
+          COMFYUI_TIMEOUT_SECONDS: ${{ vars.COMFYUI_TIMEOUT_SECONDS || '420' }}
+          COMFYUI_SCENE_SECONDS: ${{ vars.COMFYUI_SCENE_SECONDS || '7' }}
+        run: |
+          set +e
+          mkdir -p work/job/generated
+          python renderer/generative_media.py work/job/scene-plan.json work/job/generated \
+            --aspect '${{ steps.job.outputs.aspect }}' \
+            --manifest work/job/generated/manifest.json
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            echo 'Generative visual worker failed; continuing with licensed/fallback visuals.'
+          fi
 
       - name: Source open-license Commons visuals
         shell: bash
@@ -135,11 +163,15 @@ jobs:
           FALLBACK="$GITHUB_WORKSPACE/work/job/background.mp4"
 
           mapfile -t EXPLICIT_MEDIA < <(find "$GITHUB_WORKSPACE/work/job/media" -maxdepth 1 -type f \( -name '*.mp4' -o -name '*.mov' -o -name '*.mkv' -o -name '*.webm' \) -print | sort)
+          mapfile -t GENERATED_MEDIA < <(find "$GITHUB_WORKSPACE/work/job/generated" -maxdepth 1 -type f -name 'scene-*.mp4' -print 2>/dev/null | sort)
           mapfile -t COMMONS_MEDIA < <(find "$GITHUB_WORKSPACE/work/job/commons" -maxdepth 1 -type f -name '*.mp4' -print 2>/dev/null | sort)
 
           if [ "${#EXPLICIT_MEDIA[@]}" -gt 0 ]; then
             MATERIALS="$(IFS=,; echo "${EXPLICIT_MEDIA[*]}")"
             echo "Using ${#EXPLICIT_MEDIA[@]} operator-supplied owned/licensed media file(s)."
+          elif [ "${#GENERATED_MEDIA[@]}" -gt 0 ]; then
+            MATERIALS="$(IFS=,; echo "${GENERATED_MEDIA[*]}")"
+            echo "Using ${#GENERATED_MEDIA[@]} ComfyUI/LTX generated scene clip(s)."
           elif [ "${#COMMONS_MEDIA[@]}" -gt 0 ]; then
             MATERIALS="$(IFS=,; echo "${COMMONS_MEDIA[*]}")"
             echo "Using ${#COMMONS_MEDIA[@]} open-license Wikimedia Commons scene clip(s)."
@@ -198,6 +230,12 @@ jobs:
           PY
 
       - name: Autonomous publish quality gate
+        if: ${{ steps.job.outputs.autonomous == 'true' }}
+        run: |
+          python autonomy/qa_gate.py '${{ steps.job.outputs.job_file }}' output/qa-transcript.json output/ffprobe.json --report output/autonomy-qa.json
+
+      - name: Mark manual render as not eligible for autonomous publish
+        if: ${{ steps.job.outputs.autonomous != 'true' }}
         run: |
           python autonomy/qa_gate.py '${{ steps.job.outputs.job_file }}' output/qa-transcript.json output/ffprobe.json --report output/autonomy-qa.json
 
@@ -214,6 +252,7 @@ jobs:
             output/autonomy-qa.json
             work/job/scene-plan.json
             work/job/meta.json
+            work/job/generated/manifest.json
             work/job/commons/attribution.json
             ${{ steps.job.outputs.job_file }}
           if-no-files-found: warn
