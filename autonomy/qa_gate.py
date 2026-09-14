@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Machine gate for unattended publishing.
 
-Fails closed: a video is not eligible for automatic upload unless the rendered
-speech substantially matches the intended script and the media probe is sane.
+Autonomous jobs fail closed: a video is not eligible for automatic upload
+unless the rendered speech substantially matches the intended script and the
+media probe is sane. Manual/demo jobs are explicitly marked skipped so the
+regular renderer remains usable without creating an autonomous publish signal.
 """
 from __future__ import annotations
 
@@ -16,6 +18,13 @@ def words(text: str) -> list[str]:
     return re.findall(r"[a-z0-9']+", text.lower())
 
 
+def write_report(path: str, payload: dict) -> None:
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    print(json.dumps(payload))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("job_json")
@@ -25,6 +34,19 @@ def main() -> None:
     args = ap.parse_args()
 
     job = json.loads(Path(args.job_json).read_text(encoding="utf-8"))
+
+    # Manual/demo renders must continue to work, but they must never be mistaken
+    # for machine-approved autonomous uploads by the downstream publisher.
+    if job.get("source") != "tubeautonomy-autopilot":
+        write_report(args.report, {
+            "passed": False,
+            "skipped": True,
+            "eligibleForAutoPublish": False,
+            "reason": "job is not a tubeautonomy-autopilot job",
+            "source": job.get("source") or "manual",
+        })
+        return
+
     qa = json.loads(Path(args.qa_json).read_text(encoding="utf-8"))
     probe = json.loads(Path(args.ffprobe_json).read_text(encoding="utf-8"))
 
@@ -70,11 +92,14 @@ def main() -> None:
     if checks["wordCount"] < 20:
         failures.append(f"too few transcribed words: {checks['wordCount']}")
 
-    report = {"passed": not failures, "checks": checks, "failures": failures}
-    out = Path(args.report)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(report, indent=2), encoding="utf-8")
-    print(json.dumps(report))
+    report = {
+        "passed": not failures,
+        "skipped": False,
+        "eligibleForAutoPublish": not failures,
+        "checks": checks,
+        "failures": failures,
+    }
+    write_report(args.report, report)
     if failures:
         raise SystemExit("machine publish gate failed: " + "; ".join(failures))
 
