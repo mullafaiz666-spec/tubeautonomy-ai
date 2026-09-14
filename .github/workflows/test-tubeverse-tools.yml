@@ -7,6 +7,7 @@ on:
       - 'renderer/**'
       - 'publisher/**'
       - 'autonomy/**'
+      - 'scripts/**'
       - '.github/workflows/autonomous-content-factory.yml'
       - '.github/workflows/autonomous-youtube-publish.yml'
       - '.github/workflows/autonomy-learning.yml'
@@ -34,6 +35,8 @@ jobs:
       - name: Compile Python tools
         run: |
           python -m py_compile renderer/*.py publisher/*.py autonomy/*.py
+      - name: Validate shell setup scripts
+        run: bash -n scripts/*.sh
       - name: Test deterministic scene planner
         run: |
           python - <<'PY'
@@ -76,9 +79,10 @@ jobs:
           grep -q 'originalityPassed' autonomy/qa_gate.py
           grep -q 'eligibleForAutoPublish' autonomy/qa_gate.py
           grep -q 'source.*tubeautonomy-autopilot' autonomy/pipeline.py
-          grep -q 'workflow_run' .github/workflows/autonomous-youtube-publish.yml
-          grep -q -- '--confirm-upload' .github/workflows/autonomous-youtube-publish.yml
-          grep -q 'publishing-history' .github/workflows/autonomous-youtube-publish.yml
+          grep -q 'autonomy-trigger' .github/workflows/autonomous-content-factory.yml
+          grep -q 'workflow_call' .github/workflows/render-tubeverse-video.yml
+          grep -q -- '--confirm-upload' .github/workflows/render-tubeverse-video.yml
+          grep -q 'publishing-history' .github/workflows/render-tubeverse-video.yml
           grep -q 'channel-performance.json' .github/workflows/autonomy-learning.yml
       - name: Verify publisher safety defaults
         run: |
