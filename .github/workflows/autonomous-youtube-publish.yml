@@ -7,7 +7,7 @@ on:
 
 permissions:
   actions: read
-  contents: read
+  contents: write
 
 jobs:
   publish:
@@ -23,6 +23,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: tubeverse-actions
+          fetch-depth: 0
 
       - name: Download verified render artifact
         uses: actions/download-artifact@v4
@@ -39,7 +40,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          JOB_FILE="$(find downloaded -type f -path '*/render-queue/auto-*.json' -o -type f -name 'auto-*.json' | head -n1 || true)"
+          JOB_FILE="$(find downloaded -type f \( -path '*/render-queue/auto-*.json' -o -name 'auto-*.json' \) | head -n1 || true)"
           VIDEO_FILE="$(find downloaded -type f -name 'tubeverse-video.mp4' | head -n1 || true)"
           QA_FILE="$(find downloaded -type f -name 'autonomy-qa.json' | head -n1 || true)"
           if [ -z "$JOB_FILE" ] || [ -z "$VIDEO_FILE" ] || [ -z "$QA_FILE" ]; then
@@ -53,6 +54,7 @@ jobs:
           qa=json.load(open(sys.argv[2]))
           assert job.get('source') == 'tubeautonomy-autopilot', job.get('source')
           assert qa.get('passed') is True, qa
+          assert qa.get('eligibleForAutoPublish') is True, qa
           assert (job.get('autonomy') or {}).get('originality',{}).get('passed') is True
           PY
           echo 'eligible=true' >> "$GITHUB_OUTPUT"
@@ -79,7 +81,6 @@ jobs:
         run: python -m pip install -r publisher/requirements.txt
 
       - name: Prepare original metadata and thumbnail
-        id: publish_meta
         if: ${{ steps.meta.outputs.eligible == 'true' }}
         shell: bash
         run: |
@@ -106,7 +107,45 @@ jobs:
             --tags "$(cat publish/tags.txt)" \
             --privacy "$YOUTUBE_PRIVACY" \
             --thumbnail publish/thumbnail.jpg \
+            --result-json publish/youtube-result.json \
             --confirm-upload | tee publish/youtube-result.txt
+          test -s publish/youtube-result.json
+
+      - name: Persist publication for the learning agent
+        if: ${{ steps.meta.outputs.eligible == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Move to the newest branch head before writing history; render/publish
+          # artifacts remain untracked and survive the reset.
+          git fetch origin tubeverse-actions
+          git reset --hard origin/tubeverse-actions
+          mkdir -p publishing-history
+          python - '${{ steps.meta.outputs.job_file }}' publish/youtube-result.json "$GITHUB_RUN_ID" <<'PY'
+          import json, pathlib, sys
+          job=json.load(open(sys.argv[1]))
+          result=json.load(open(sys.argv[2]))
+          auto=job.get('autonomy') or {}
+          history={
+              **result,
+              'sourceRunId': job.get('id'),
+              'publisherWorkflowRunId': sys.argv[3],
+              'niche': auto.get('niche'),
+              'angle': auto.get('angle'),
+              'hook': auto.get('hook'),
+              'format': auto.get('format'),
+              'originality': auto.get('originality'),
+              'trendSourceVideoIds': auto.get('sourceVideoIds') or [],
+          }
+          target=pathlib.Path('publishing-history') / f"{result['videoId']}.json"
+          target.write_text(json.dumps(history, indent=2, ensure_ascii=False), encoding='utf-8')
+          print(target)
+          PY
+          git config user.name 'TubeAutonomy Publisher'
+          git config user.email 'tubeautonomy-publisher@users.noreply.github.com'
+          git add publishing-history/*.json
+          git commit -m "autonomy: record YouTube publication $(python -c "import json; print(json.load(open('publish/youtube-result.json'))['videoId'])")"
+          git push origin HEAD:tubeverse-actions
 
       - uses: actions/upload-artifact@v4
         if: ${{ steps.meta.outputs.eligible == 'true' }}
@@ -115,5 +154,6 @@ jobs:
           path: |
             publish/thumbnail.jpg
             publish/youtube-result.txt
+            publish/youtube-result.json
             ${{ steps.meta.outputs.qa_file }}
           retention-days: 30
