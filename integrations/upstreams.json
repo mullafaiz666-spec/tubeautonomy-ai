@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "generatedFor": "TubeAutonomy + TubeVerse",
+  "policy": "Use package/service boundaries where possible; never copy upstream source wholesale unless explicitly reviewed.",
+  "upstreams": [
+    {
+      "name": "LangGraph",
+      "repo": "https://github.com/langchain-ai/langgraph.git",
+      "defaultBranch": "main",
+      "role": "autonomous workflow orchestration",
+      "integration": "pypi:langgraph",
+      "required": true
+    },
+    {
+      "name": "Google GenAI Python SDK",
+      "repo": "https://github.com/googleapis/python-genai.git",
+      "defaultBranch": "main",
+      "role": "story writing, research synthesis and multimodal reasoning",
+      "integration": "pypi:google-genai",
+      "required": true
+    },
+    {
+      "name": "YouTube Transcript API",
+      "repo": "https://github.com/jdepoix/youtube-transcript-api.git",
+      "defaultBranch": "master",
+      "role": "transcript research",
+      "integration": "pypi:youtube-transcript-api",
+      "required": true
+    },
+    {
+      "name": "yt-dlp",
+      "repo": "https://github.com/yt-dlp/yt-dlp.git",
+      "defaultBranch": "master",
+      "role": "metadata and explicitly owned/licensed media ingestion",
+      "integration": "pypi:yt-dlp",
+      "required": true
+    },
+    {
+      "name": "Sentence Transformers",
+      "repo": "https://github.com/huggingface/sentence-transformers.git",
+      "defaultBranch": "main",
+      "role": "semantic originality gate",
+      "integration": "pypi:sentence-transformers",
+      "required": true
+    },
+    {
+      "name": "ComfyUI",
+      "repo": "https://github.com/Comfy-Org/ComfyUI.git",
+      "defaultBranch": "master",
+      "role": "external image/video GPU workflow service",
+      "integration": "service:renderer/generative_media.py",
+      "required": false
+    },
+    {
+      "name": "LTX-Video",
+      "repo": "https://github.com/Lightricks/LTX-Video.git",
+      "defaultBranch": "main",
+      "role": "external generative video model used through the GPU service",
+      "integration": "service:ComfyUI/LTX workflow",
+      "required": false
+    },
+    {
+      "name": "MoneyPrinterTurbo",
+      "repo": "https://github.com/harry0703/MoneyPrinterTurbo.git",
+      "defaultBranch": "main",
+      "pinnedCommit": "cf5a3aedad1741d012152d355aa909d224fc4557",
+      "role": "final composition, subtitles and editing",
+      "integration": "git-clone:pinned",
+      "required": true
+    },
+    {
+      "name": "faster-whisper",
+      "repo": "https://github.com/SYSTRAN/faster-whisper.git",
+      "defaultBranch": "master",
+      "role": "finished-video speech QA",
+      "integration": "pypi:faster-whisper",
+      "required": true
+    },
+    {
+      "name": "Kokoro",
+      "repo": "https://github.com/hexgrad/kokoro.git",
+      "defaultBranch": "main",
+      "role": "local neural narration",
+      "integration": "pypi:kokoro",
+      "required": true
+    },
+    {
+      "name": "Google API Python Client",
+      "repo": "https://github.com/googleapis/google-api-python-client.git",
+      "defaultBranch": "main",
+      "role": "official YouTube discovery, analytics and publishing API client",
+      "integration": "pypi:google-api-python-client",
+      "required": true
+    },
+    {
+      "name": "ShortGPT",
+      "repo": "https://github.com/RayVentura/ShortGPT.git",
+      "defaultBranch": "stable",
+      "role": "architecture/reference ideas only",
+      "integration": "reference-only",
+      "required": false
+    }
+  ]
+}
