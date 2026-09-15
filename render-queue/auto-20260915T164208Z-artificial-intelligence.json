@@ -1,0 +1,66 @@
+{
+  "id": "auto-20260915T164208Z-artificial-intelligence",
+  "source": "tubeautonomy-autopilot",
+  "title": "AI's Reality: The Hidden Truth Behind the Warning",
+  "description": "In this short, we'll explore the reality behind the warnings about AI potentially killing humanity. We'll start by explaining how AI works, then dive into what recent research says about its impact.",
+  "tags": [
+    "artificial-intelligence",
+    "ai-reality",
+    "human-impact"
+  ],
+  "thumbnailText": "AI's Reality",
+  "script": "Imagine a world where machines can think, learn, and solve problems. Today, AI isn't just technology—it's part of our lives. From self-driving cars to smart homes, AI is here to help. But what if it starts changing us too much? The real question isn't whether AI will harm us, but how far we're willing to go with it.",
+  "aspectRatio": "9:16",
+  "voiceEngine": "kokoro",
+  "mediaUrls": [],
+  "scenes": [
+    {
+      "narration": "We've seen AI evolve from simple tools to advanced systems that change how people live.",
+      "visualPrompt": "A futuristic city with self-driving cars, robots, and AI-driven services.",
+      "keywords": [
+        "future",
+        "technology"
+      ]
+    },
+    {
+      "narration": "But what if AI becomes more dangerous?",
+      "visualPrompt": "A close-up of a person interacting with an AI assistant while feeling anxious.",
+      "keywords": [
+        "anxiety",
+        "danger"
+      ]
+    },
+    {
+      "narration": "AI doesn't just act—it learns. It adapts, evolves, and changes with each day.",
+      "visualPrompt": "A young child using an AI app for learning and growth.",
+      "keywords": [
+        "learning",
+        "evolution"
+      ]
+    }
+  ],
+  "autonomy": {
+    "niche": "artificial intelligence",
+    "region": "US",
+    "format": "shorts",
+    "angle": "Focus on how AI has already influenced everyday life without labeling it as harmful.",
+    "hook": "A powerful opening line about AI shaping our future.",
+    "originality": {
+      "passed": true,
+      "semanticMax": 0.0,
+      "semanticLimit": 0.86,
+      "eightGramOverlap": 0.0,
+      "eightGramLimit": 0.05,
+      "attempt": 1
+    },
+    "generatedAt": "2026-09-15T16:42:08.119116Z",
+    "sourceVideoIds": [
+      "HI6skJ4Wf5I",
+      "m8o2GrbR3d8",
+      "79l9u2T-1lo",
+      "c0m6yaGlZh4",
+      "MLeTQWQiOvg",
+      "_Fi4cpKCXss"
+    ]
+  }
+}

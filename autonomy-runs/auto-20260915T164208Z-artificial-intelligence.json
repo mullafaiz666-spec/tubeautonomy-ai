@@ -1,0 +1,77 @@
+{
+  "runId": "auto-20260915T164208Z-artificial-intelligence",
+  "niche": "artificial intelligence",
+  "region": "US",
+  "generatedAt": "2026-09-15T16:42:08.119438Z",
+  "originality": {
+    "passed": true,
+    "semanticMax": 0.0,
+    "semanticLimit": 0.86,
+    "eightGramOverlap": 0.0,
+    "eightGramLimit": 0.05,
+    "attempt": 1
+  },
+  "selectedTrendSources": [
+    {
+      "videoId": "HI6skJ4Wf5I",
+      "title": "Anthropic CEO reacts to 'AI could kill us all' warning",
+      "channelTitle": "CNN",
+      "publishedAt": null,
+      "views": 1296334,
+      "viewsPerHour": 0.0,
+      "trendScore": 47.5636,
+      "url": "https://www.youtube.com/watch?v=HI6skJ4Wf5I"
+    },
+    {
+      "videoId": "m8o2GrbR3d8",
+      "title": "SIMPLEST Explanation of How Artificial Intelligence Works? No Jargon | What is AI? How AI works?",
+      "channelTitle": "Science Simplified 4 All",
+      "publishedAt": null,
+      "views": 1854323,
+      "viewsPerHour": 0.0,
+      "trendScore": 47.0076,
+      "url": "https://www.youtube.com/watch?v=m8o2GrbR3d8"
+    },
+    {
+      "videoId": "79l9u2T-1lo",
+      "title": "Former OpenAI employee: 'Yes, AI might really kill us all'",
+      "channelTitle": "CNN",
+      "publishedAt": null,
+      "views": 464456,
+      "viewsPerHour": 0.0,
+      "trendScore": 44.8903,
+      "url": "https://www.youtube.com/watch?v=79l9u2T-1lo"
+    },
+    {
+      "videoId": "c0m6yaGlZh4",
+      "title": "What is Artificial Intelligence? | Quick Learner",
+      "channelTitle": "Duke University",
+      "publishedAt": null,
+      "views": 403248,
+      "viewsPerHour": 0.0,
+      "trendScore": 44.5834,
+      "url": "https://www.youtube.com/watch?v=c0m6yaGlZh4"
+    },
+    {
+      "videoId": "MLeTQWQiOvg",
+      "title": "The turbulent era of artificial intelligence is here",
+      "channelTitle": "Bill Gates",
+      "publishedAt": null,
+      "views": 5151983,
+      "viewsPerHour": 0.0,
+      "trendScore": 44.3377,
+      "url": "https://www.youtube.com/watch?v=MLeTQWQiOvg"
+    },
+    {
+      "videoId": "_Fi4cpKCXss",
+      "title": "More AI researchers speak out after viral warning that AI could kill humanity within a decade",
+      "channelTitle": "NBC News",
+      "publishedAt": null,
+      "views": 547601,
+      "viewsPerHour": 0.0,
+      "trendScore": 39.4701,
+      "url": "https://www.youtube.com/watch?v=_Fi4cpKCXss"
+    }
+  ],
+  "renderJob": "render-queue/auto-20260915T164208Z-artificial-intelligence.json"
+}
