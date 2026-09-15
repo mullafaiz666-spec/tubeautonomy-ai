@@ -1,0 +1,28 @@
+{
+  "id": "integration-smoke-20260915-v2",
+  "title": "TubeAutonomy Connected Toolchain Verification",
+  "description": "Second integration render verifying corrected job resolution and selected upstream tooling.",
+  "tags": ["TubeAutonomy", "TubeVerse", "AI automation"],
+  "thumbnailText": "TOOLCHAIN VERIFIED",
+  "aspectRatio": "9:16",
+  "voiceEngine": "kokoro",
+  "mediaUrls": [],
+  "script": "This TubeAutonomy verification build is using the corrected render resolver. The system connects autonomous orchestration, research tools, originality checking, scene planning, local neural narration, video assembly, transcription quality assurance, and a gated YouTube publisher. The selected upstream projects are now recorded in a verified integration manifest, so the build can detect if a required repository disappears or changes availability. GPU image and video generation remains an optional service boundary, while licensed visuals and deterministic fallbacks keep the pipeline operational when no GPU endpoint is connected.",
+  "scenes": [
+    {
+      "narration": "This TubeAutonomy verification build is using the corrected render resolver.",
+      "visualPrompt": "vertical cinematic AI control room with verified pipeline status and video render queue",
+      "keywords": ["AI control room", "video render", "automation"]
+    },
+    {
+      "narration": "The selected upstream projects are now recorded in a verified integration manifest.",
+      "visualPrompt": "interconnected open source software nodes forming a secure media production pipeline",
+      "keywords": ["open source", "software integration", "workflow"]
+    },
+    {
+      "narration": "GPU image and video generation remains an optional service boundary.",
+      "visualPrompt": "GPU visual generation service connected to a resilient video pipeline with fallback media sources",
+      "keywords": ["GPU", "generative video", "resilient system"]
+    }
+  ]
+}
