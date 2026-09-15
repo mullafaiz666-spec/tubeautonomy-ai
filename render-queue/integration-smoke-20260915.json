@@ -1,0 +1,33 @@
+{
+  "id": "integration-smoke-20260915",
+  "title": "TubeAutonomy AI — Autonomous Video Factory",
+  "description": "Integration verification render for the TubeAutonomy and TubeVerse toolchain.",
+  "tags": ["AI", "automation", "video", "TubeAutonomy"],
+  "thumbnailText": "AI BUILDS THE VIDEO",
+  "aspectRatio": "9:16",
+  "voiceEngine": "kokoro",
+  "mediaUrls": [],
+  "script": "An autonomous content studio needs more than a dashboard. TubeAutonomy now connects research, story planning, original scene direction, neural narration, video composition, transcription quality checks, and publishing tools into one recoverable pipeline. Trend research informs the topic, but the writer creates a new angle and original script. Visual scenes can come from a GPU generation service when available, while open licensed and deterministic fallback visuals keep the render moving when it is not. Kokoro produces narration, MoneyPrinterTurbo and FFmpeg assemble the video, and faster whisper verifies the final speech before any autonomous publication is allowed.",
+  "scenes": [
+    {
+      "narration": "An autonomous content studio needs more than a dashboard.",
+      "visualPrompt": "cinematic futuristic creator studio with multiple autonomous AI departments represented as glowing workstations, vertical composition",
+      "keywords": ["artificial intelligence", "video production", "creator studio"]
+    },
+    {
+      "narration": "TubeAutonomy now connects research, story planning, original scene direction, neural narration, video composition, transcription quality checks, and publishing tools into one recoverable pipeline.",
+      "visualPrompt": "clean cinematic workflow visualization from research to script to images to video to quality verification to YouTube publishing",
+      "keywords": ["workflow", "video editing", "automation"]
+    },
+    {
+      "narration": "Trend research informs the topic, but the writer creates a new angle and original script.",
+      "visualPrompt": "AI research dashboard transforming trend signals into an original screenplay document, editorial cinematic lighting",
+      "keywords": ["trend analysis", "writing", "storytelling"]
+    },
+    {
+      "narration": "Kokoro produces narration, MoneyPrinterTurbo and FFmpeg assemble the video, and faster whisper verifies the final speech before any autonomous publication is allowed.",
+      "visualPrompt": "professional video editing timeline with audio waveform, subtitles, automated quality check marks and final export",
+      "keywords": ["video editing", "audio waveform", "subtitles"]
+    }
+  ]
+}
