@@ -12,12 +12,20 @@
       "required": true
     },
     {
+      "name": "Qwen3",
+      "repo": "https://github.com/QwenLM/Qwen3.git",
+      "defaultBranch": "main",
+      "role": "zero-key local story writer fallback",
+      "integration": "huggingface:Qwen/Qwen3-0.6B",
+      "required": true
+    },
+    {
       "name": "Google GenAI Python SDK",
       "repo": "https://github.com/googleapis/python-genai.git",
       "defaultBranch": "main",
-      "role": "story writing, research synthesis and multimodal reasoning",
+      "role": "optional higher-capability Gemini story writer and reasoning",
       "integration": "pypi:google-genai",
-      "required": true
+      "required": false
     },
     {
       "name": "YouTube Transcript API",
@@ -31,7 +39,7 @@
       "name": "yt-dlp",
       "repo": "https://github.com/yt-dlp/yt-dlp.git",
       "defaultBranch": "master",
-      "role": "metadata and explicitly owned/licensed media ingestion",
+      "role": "zero-key public trend metadata and explicitly owned/licensed media ingestion",
       "integration": "pypi:yt-dlp",
       "required": true
     },
