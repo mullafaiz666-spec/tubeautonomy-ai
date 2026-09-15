@@ -8,6 +8,7 @@ on:
       - 'publisher/**'
       - 'autonomy/**'
       - 'scripts/**'
+      - 'integrations/**'
       - '.github/workflows/autonomous-content-factory.yml'
       - '.github/workflows/autonomous-youtube-publish.yml'
       - '.github/workflows/autonomy-learning.yml'
@@ -34,9 +35,11 @@ jobs:
           python-version: '3.11'
       - name: Compile Python tools
         run: |
-          python -m py_compile renderer/*.py publisher/*.py autonomy/*.py
+          python -m py_compile renderer/*.py publisher/*.py autonomy/*.py scripts/verify_upstreams.py
       - name: Validate shell setup scripts
         run: bash -n scripts/*.sh
+      - name: Verify selected upstream repositories
+        run: python scripts/verify_upstreams.py
       - name: Test deterministic scene planner
         run: |
           python - <<'PY'
