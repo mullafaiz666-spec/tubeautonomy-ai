@@ -7,7 +7,6 @@ on:
         description: Render job JSON path
         required: false
         type: string
-        default: render-queue/demo-001.json
   push:
     branches: [tubeverse-actions]
     paths:
