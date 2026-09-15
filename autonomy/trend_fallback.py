@@ -13,7 +13,8 @@ def _int(value: Any) -> int:
         return 0
 
 
-def _published_at(entry: dict[str, Any]) -> tuple[str, float]:
+def _published_at(entry: dict[str, Any]) -> tuple[str, float] | None:
+    """Return a trustworthy publication timestamp and age when available."""
     now = datetime.now(timezone.utc)
     timestamp = entry.get("timestamp") or entry.get("release_timestamp")
     dt: datetime | None = None
@@ -30,7 +31,8 @@ def _published_at(entry: dict[str, Any]) -> tuple[str, float]:
             except ValueError:
                 dt = None
     if dt is None:
-        dt = now
+        # Do not accidentally rank an undated result as brand new.
+        return None
     age_hours = max((now - dt).total_seconds() / 3600.0, 0.5)
     return dt.isoformat().replace("+00:00", "Z"), age_hours
 
@@ -47,8 +49,10 @@ def _score(views: int, likes: int, comments: int, age_hours: float) -> tuple[flo
 def scan_trends_with_ytdlp(state: dict[str, Any]) -> dict[str, Any]:
     """Discover recent YouTube videos without a Data API key.
 
-    This uses yt-dlp only for public metadata. It never downloads competitor
-    media and feeds only titles/statistics/video IDs to the research stage.
+    Current yt-dlp exposes the YouTube search extractor through the supported
+    `ytsearchN:<query>` pseudo-URL. We fetch a wider result set, then apply our
+    own publication-age, velocity and engagement ranking. No competitor media is
+    downloaded; only public metadata is used as a trend/research signal.
     """
     from yt_dlp import YoutubeDL
 
@@ -56,14 +60,14 @@ def scan_trends_with_ytdlp(state: dict[str, Any]) -> dict[str, Any]:
     queries = [niche, f"{niche} news", f"{niche} explained", f"{niche} shorts"]
     wanted = max(int(state.get("top_videos", 6)) * 3, 12)
     lookback = max(int(state.get("lookback_hours", 72)), 6)
+    results_per_query = max(12, min(wanted, 20))
 
     opts = {
         "quiet": True,
         "no_warnings": True,
         "skip_download": True,
         "ignoreerrors": True,
-        "socket_timeout": 20,
-        "noplaylist": True,
+        "socket_timeout": 25,
         "geo_bypass_country": str(state.get("region") or "US"),
     }
 
@@ -71,18 +75,23 @@ def scan_trends_with_ytdlp(state: dict[str, Any]) -> dict[str, Any]:
     with YoutubeDL(opts) as ydl:
         for query in queries:
             try:
-                info = ydl.extract_info(f"ytsearchdate8:{query}", download=False)
-            except Exception:
+                info = ydl.extract_info(f"ytsearch{results_per_query}:{query}", download=False)
+            except Exception as exc:
+                print(f"yt-dlp search failed for {query!r}: {type(exc).__name__}: {exc}")
                 continue
             for entry in (info or {}).get("entries") or []:
                 if not entry or not entry.get("id"):
                     continue
-                video_id = str(entry["id"])
-                published_at, age_hours = _published_at(entry)
-                # Search results occasionally contain older material. Keep a
-                # little tolerance because upload dates can be day-granularity.
+                publication = _published_at(entry)
+                if publication is None:
+                    continue
+                published_at, age_hours = publication
+                # Search is relevance-ranked, so we perform our own freshness
+                # filter and trend ranking after metadata extraction.
                 if age_hours > lookback * 1.75:
                     continue
+
+                video_id = str(entry["id"])
                 views = _int(entry.get("view_count"))
                 likes = _int(entry.get("like_count"))
                 comments = _int(entry.get("comment_count"))
@@ -108,6 +117,7 @@ def scan_trends_with_ytdlp(state: dict[str, Any]) -> dict[str, Any]:
 
     candidates = sorted(by_id.values(), key=lambda x: (x["trendScore"], x["viewsPerHour"]), reverse=True)
     if not candidates:
-        raise RuntimeError(f"yt-dlp trend fallback returned no usable videos for niche={niche!r}")
+        raise RuntimeError(f"yt-dlp trend fallback returned no recent usable videos for niche={niche!r}")
     state["candidates"] = candidates[:wanted]
+    print(f"yt-dlp trend fallback selected {len(state['candidates'])} recent candidates")
     return state
