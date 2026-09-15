@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 
 import pipeline
+from trend_fallback import scan_trends_with_ytdlp
 
 
 def memory_context(path: str) -> str:
@@ -46,6 +47,10 @@ def main() -> None:
     ap.add_argument("--memory", default="learning/channel-performance.json")
     ap.add_argument("--result-file", default="autonomy-result.json")
     args = ap.parse_args()
+
+    if not os.environ.get("YOUTUBE_API_KEY", "").strip():
+        print("YOUTUBE_API_KEY not configured; using yt-dlp public-metadata trend discovery fallback.")
+        pipeline.scan_trends = scan_trends_with_ytdlp
 
     initial: pipeline.FactoryState = {
         "niche": args.niche,
