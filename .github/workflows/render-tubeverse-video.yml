@@ -12,7 +12,6 @@ on:
     paths:
       - 'render-queue/**.json'
       - 'renderer/**'
-      - '.github/workflows/render-tubeverse-video.yml'
   workflow_dispatch:
     inputs:
       job_file:
@@ -38,7 +37,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: tubeverse-actions
+          ref: ${{ github.event_name == 'push' && github.sha || 'tubeverse-actions' }}
+          fetch-depth: 2
 
       - uses: actions/setup-python@v5
         with:
@@ -73,6 +73,7 @@ jobs:
           fi
           if [ -z "$JOB_FILE" ]; then JOB_FILE='render-queue/demo-001.json'; fi
           test -f "$JOB_FILE"
+          echo "Resolved render job: $JOB_FILE"
           echo "job_file=$JOB_FILE" >> "$GITHUB_OUTPUT"
           AUTONOMOUS="$(python - "$JOB_FILE" <<'PY'
           import json,sys
