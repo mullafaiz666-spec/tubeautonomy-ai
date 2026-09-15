@@ -6,9 +6,6 @@ on:
     paths:
       - 'autonomy-trigger/**.json'
   schedule:
-    # GitHub schedules only execute from the default branch. This remains here
-    # for portability; the isolated branch is triggered by the external daily
-    # heartbeat instead of modifying main.
     - cron: '30 4 * * *'
   workflow_dispatch:
     inputs:
@@ -25,9 +22,7 @@ on:
         required: false
         default: shorts
         type: choice
-        options:
-          - shorts
-          - long
+        options: [shorts, long]
 
 permissions:
   contents: write
@@ -40,7 +35,7 @@ concurrency:
 jobs:
   research-write-package:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     outputs:
       job_file: ${{ steps.result.outputs.job_file }}
       meta_file: ${{ steps.result.outputs.meta_file }}
@@ -48,11 +43,13 @@ jobs:
       YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-2.5-flash' }}
+      QWEN_WRITER_MODEL: ${{ vars.QWEN_WRITER_MODEL || 'Qwen/Qwen3-0.6B' }}
       AUTONOMY_NICHE: ${{ inputs.niche || vars.AUTONOMY_NICHE || 'artificial intelligence' }}
       AUTONOMY_REGION: ${{ inputs.region || vars.AUTONOMY_REGION || 'US' }}
       AUTONOMY_FORMAT: ${{ inputs.format || vars.AUTONOMY_FORMAT || 'shorts' }}
       AUTONOMY_LOOKBACK_HOURS: ${{ vars.AUTONOMY_LOOKBACK_HOURS || '72' }}
       AUTONOMY_TOP_VIDEOS: ${{ vars.AUTONOMY_TOP_VIDEOS || '6' }}
+      HF_HOME: ${{ github.workspace }}/.cache/huggingface
     steps:
       - uses: actions/checkout@v4
         with:
@@ -65,21 +62,34 @@ jobs:
           cache: pip
           cache-dependency-path: autonomy/requirements.txt
 
-      - name: Verify autonomous research credentials
+      - name: Resolve zero-key research and writer engines
         shell: bash
         run: |
           set -euo pipefail
-          test -n "$GEMINI_API_KEY" || { echo 'Missing GEMINI_API_KEY repository secret'; exit 2; }
           if [ -z "$YOUTUBE_API_KEY" ]; then
-            echo 'YOUTUBE_API_KEY is not configured; yt-dlp public-metadata trend discovery will be used.'
+            echo 'Trend engine: yt-dlp public metadata fallback.'
           else
-            echo 'Using official YouTube Data API for trend discovery.'
+            echo 'Trend engine: official YouTube Data API.'
+          fi
+          if [ -z "$GEMINI_API_KEY" ]; then
+            echo "Writer engine: local $QWEN_WRITER_MODEL on the GitHub runner."
+          else
+            echo 'Writer engine: Gemini.'
           fi
 
       - name: Install autonomous agent stack
         run: |
           python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
           python -m pip install -r autonomy/requirements.txt
+
+      - name: Cache local writer and embedding models
+        uses: actions/cache@v4
+        with:
+          path: .cache/huggingface
+          key: tubeautonomy-hf-${{ runner.os }}-${{ hashFiles('autonomy/requirements.txt') }}
+          restore-keys: |
+            tubeautonomy-hf-${{ runner.os }}-
 
       - name: Refresh our own channel performance memory
         shell: bash
