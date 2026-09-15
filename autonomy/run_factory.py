@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 
 import pipeline
+from local_writer import write_story_local
 from trend_fallback import scan_trends_with_ytdlp
 
 
@@ -52,6 +53,12 @@ def main() -> None:
         print("YOUTUBE_API_KEY not configured; using yt-dlp public-metadata trend discovery fallback.")
         pipeline.scan_trends = scan_trends_with_ytdlp
 
+    if not os.environ.get("GEMINI_API_KEY", "").strip():
+        print("GEMINI_API_KEY not configured; using local Qwen3 story writer fallback.")
+        pipeline.write_story = write_story_local
+    else:
+        print("Using Gemini story writer.")
+
     initial: pipeline.FactoryState = {
         "niche": args.niche,
         "region": args.region.upper(),
@@ -59,9 +66,6 @@ def main() -> None:
         "top_videos": max(3, min(args.top_videos, 10)),
         "format": args.format,
         "attempt": 0,
-        # pipeline.write_story already gives this field to Gemini. Supplying our
-        # own historical performance here makes the first draft channel-aware;
-        # any later originality failure replaces it with stricter rewrite advice.
         "originality_feedback": memory_context(args.memory),
     }
     result = pipeline.build_graph().invoke(initial)
@@ -70,6 +74,7 @@ def main() -> None:
         "metadataPath": result["metadata_path"],
         "title": result["draft"]["title"],
         "originality": result["originality"],
+        "writerEngine": result.get("writerEngine", "gemini"),
     }
     Path(args.result_file).write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(json.dumps(summary))
