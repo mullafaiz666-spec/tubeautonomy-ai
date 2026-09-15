@@ -1,0 +1,28 @@
+{
+  "id": "integration-smoke-20260915-v3",
+  "title": "TubeAutonomy Exact Job Resolution Verified",
+  "description": "Verification render after fixing exact push-SHA checkout and selected upstream integrations.",
+  "tags": ["TubeAutonomy", "TubeVerse", "GitHub Actions"],
+  "thumbnailText": "EXACT JOB VERIFIED",
+  "aspectRatio": "9:16",
+  "voiceEngine": "kokoro",
+  "mediaUrls": [],
+  "script": "This is the third integration verification for TubeAutonomy. The render runner now checks out the exact GitHub push commit before resolving the job file, so a moving branch can no longer silently replace a requested video with the demo. The upstream tool manifest is verified in continuous integration, and the autonomous writer can use a local Qwen model when no Gemini key is available. Trend discovery can also fall back to public YouTube metadata through yt-dlp. Rendering still uses Kokoro narration, MoneyPrinterTurbo, FFmpeg, and faster-whisper quality assurance before any automatic publishing decision.",
+  "scenes": [
+    {
+      "narration": "The render runner now checks out the exact GitHub push commit before resolving the job file.",
+      "visualPrompt": "cinematic Git commit timeline locking onto one exact video render job, vertical format",
+      "keywords": ["git commit", "workflow", "video rendering"]
+    },
+    {
+      "narration": "The autonomous writer can use a local Qwen model when no Gemini key is available.",
+      "visualPrompt": "small local language model writing an original video script on a CPU automation server",
+      "keywords": ["local AI", "script writing", "automation"]
+    },
+    {
+      "narration": "Rendering still uses Kokoro narration, MoneyPrinterTurbo, FFmpeg, and faster-whisper quality assurance.",
+      "visualPrompt": "professional automated video pipeline with narration waveform, editing timeline, subtitles and QA checkmark",
+      "keywords": ["video editing", "voice", "quality assurance"]
+    }
+  ]
+}
